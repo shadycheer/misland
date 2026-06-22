@@ -4,8 +4,15 @@ import SwiftUI
 /// corners curve *inward* (concave) so the island looks like it flows out of
 /// the notch / menu bar above it; the bottom corners are generously rounded.
 struct NotchShape: Shape {
-    var topRadius: CGFloat = 10
-    var bottomRadius: CGFloat = 18
+    // Values match DynamicNotchKit (Kai Azim) — the reference for the real
+    // MacBook notch silhouette: subtle concave top, fairly straight bottom.
+    var topRadius: CGFloat = 6
+    var bottomRadius: CGFloat = 14
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { .init(topRadius, bottomRadius) }
+        set { topRadius = newValue.first; bottomRadius = newValue.second }
+    }
 
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height

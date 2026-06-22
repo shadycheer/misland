@@ -29,7 +29,7 @@ struct IslandRootView: View {
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
     var body: some View {
-        let shape = NotchShape(topRadius: 10, bottomRadius: 22)
+        let shape = NotchShape(topRadius: 6, bottomRadius: 14)
         shape
             .fill(.black)
             .overlay(alignment: .top) {
