@@ -24,4 +24,7 @@ test:
 watch:
 	@bash scripts/watch.sh
 
-.PHONY: build bundle run test watch
+axdump:
+	@swiftc scripts/axdump.swift -o .build/axdump 2>/dev/null && ./.build/axdump
+
+.PHONY: build bundle run test watch axdump
