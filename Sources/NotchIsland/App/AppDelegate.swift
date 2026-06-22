@@ -47,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             host.centerXAnchor.constraint(equalTo: container.centerXAnchor),
         ])
 
+        // Right-clicking the island shows the same menu — works even when the
+        // menu-bar icon is hidden behind a full notch (NSView.menu pops up
+        // without the panel needing to become key, unlike SwiftUI .contextMenu).
+        container.menu = makeAppMenu()
+
         window = NotchWindow(rootView: container)
         if let screen { window.place(on: screen, size: expandedSize) }
         setExpanded(false)
@@ -130,11 +135,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "NotchIsland")
+        statusItem.menu = makeAppMenu()
+    }
+
+    /// Build a fresh menu (Preferences / Quit) with targets bound to this app
+    /// delegate. Used by both the status item and the island's right-click menu.
+    private func makeAppMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "偏好设置…", action: #selector(showPreferences), keyEquivalent: ","))
+        let prefs = NSMenuItem(title: "偏好设置…", action: #selector(showPreferences), keyEquivalent: ",")
+        prefs.target = self
+        let quitItem = NSMenuItem(title: "退出 NotchIsland", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(prefs)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit NotchIsland", action: #selector(quit), keyEquivalent: "q"))
-        statusItem.menu = menu
+        menu.addItem(quitItem)
+        return menu
     }
 
     @objc private func showPreferences() {
