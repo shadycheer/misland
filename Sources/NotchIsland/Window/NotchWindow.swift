@@ -4,7 +4,7 @@ import SwiftUI
 enum IslandLayout {
     static let expandedWidth: CGFloat = 380
     static let expandedHeight: CGFloat = 168
-    static let sideWidth: CGFloat = 50        // art / bars zone on each side of the notch
+    static let sideWidth: CGFloat = 42        // art / bars zone on each side of the notch
     static let collapsedWidth: CGFloat = 72   // no-notch compact pill (art + bars)
     static let collapsedHeight: CGFloat = 32
 }

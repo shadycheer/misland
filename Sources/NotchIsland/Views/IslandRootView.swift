@@ -83,11 +83,11 @@ struct IslandRootView: View {
                 // shoulders are empty black framing them (not edge-jammed).
                 HStack(spacing: 0) {
                     artworkThumb
-                        .padding(.trailing, 6)
+                        .padding(.trailing, 8)
                         .frame(width: IslandLayout.sideWidth, alignment: .trailing)
                     Color.clear.frame(width: geo.notchWidth)
                     AudioBars(playing: coordinator.state?.isPlaying ?? false)
-                        .padding(.leading, 8)
+                        .padding(.leading, 9)
                         .frame(width: IslandLayout.sideWidth, alignment: .leading)
                 }
                 .frame(width: collapsedWidth, height: collapsedHeight)
@@ -111,8 +111,8 @@ struct IslandRootView: View {
                 Color.white.opacity(0.18)
             }
         }
-        .frame(width: 24, height: 24)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .frame(width: 20, height: 20)
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
     // MARK: - Expanded: full player below the notch
