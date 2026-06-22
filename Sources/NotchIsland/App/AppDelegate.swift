@@ -13,24 +13,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator = PlaybackCoordinator(sources: sources)
 
         let screen = NSScreen.main
-        let notchHeight = screen.map {
+        let notch = screen.map {
             NotchGeometry.notchSize(
                 forScreenWidth: $0.frame.width,
                 safeAreaTop: $0.safeAreaInsets.top,
                 leftArea: $0.auxiliaryTopLeftArea,
                 rightArea: $0.auxiliaryTopRightArea
-            ).height
-        } ?? 0
-        // On notch-less displays leave a small gap below the menu bar.
-        let topInset = notchHeight > 0 ? notchHeight : 6
+            )
+        } ?? .zero
+        // Black strip behind the notch so the panel fuses with it (0 = no notch).
+        let topInset = notch.height
+        let collapsedWidth = notch.width > 0 ? notch.width : IslandLayout.collapsedWidth
         let contentHeight = topInset + IslandLayout.expandedHeight
 
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator)
+            IslandRootView(coordinator: coordinator, topInset: topInset, collapsedWidth: collapsedWidth)
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
-        window = NotchWindow(rootView: hostContainer(host, topInset: topInset, height: contentHeight))
+        // Pin the host to the very top so its black top edge fuses with the notch.
+        window = NotchWindow(rootView: hostContainer(host, height: contentHeight))
         if let screen { window.place(on: screen, contentHeight: contentHeight) }
         window.orderFrontRegardless()
 
@@ -40,13 +42,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.refresh()
     }
 
-    /// Wraps the hosting view pinned just below the notch and centered, so the
-    /// island grows downward from the notch's bottom edge.
-    private func hostContainer(_ host: NSView, topInset: CGFloat, height: CGFloat) -> NSView {
+    /// Wraps the hosting view pinned to the very top-center of the panel; the
+    /// view itself reserves the notch height internally so the panel's black top
+    /// edge fuses with the notch.
+    private func hostContainer(_ host: NSView, height: CGFloat) -> NSView {
         let container = NSView(frame: CGRect(x: 0, y: 0, width: IslandLayout.expandedWidth, height: height))
         container.addSubview(host)
         NSLayoutConstraint.activate([
-            host.topAnchor.constraint(equalTo: container.topAnchor, constant: topInset),
+            host.topAnchor.constraint(equalTo: container.topAnchor),
             host.centerXAnchor.constraint(equalTo: container.centerXAnchor),
         ])
         return container
