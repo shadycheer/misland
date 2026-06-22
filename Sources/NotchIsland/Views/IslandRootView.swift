@@ -21,42 +21,27 @@ struct IslandRootView: View {
         if expanded { expandedView } else { collapsedView }
     }
 
-    // MARK: - Collapsed: info flanking the notch on the menu-bar row
+    // MARK: - Collapsed: one cohesive bar spanning the notch
 
-    @ViewBuilder private var collapsedView: some View {
-        if geo.hasNotch {
-            HStack(spacing: 0) {
-                leftWing
-                Color.clear.frame(width: geo.notchWidth, height: geo.notchHeight)
-                rightWing
-            }
-            .frame(height: geo.notchHeight)
-        } else {
-            CollapsedPill(track: coordinator.track,
-                          isPlaying: coordinator.state?.isPlaying ?? false)
-                .frame(width: IslandLayout.collapsedWidth)
-                .clipShape(.rect(bottomLeadingRadius: 18, bottomTrailingRadius: 18))
-        }
+    private var collapsedWidth: CGFloat {
+        geo.hasNotch ? geo.notchWidth + 2 * IslandLayout.sideWidth : IslandLayout.collapsedWidth
+    }
+    private var collapsedHeight: CGFloat {
+        geo.hasNotch ? geo.notchHeight : IslandLayout.collapsedHeight
     }
 
-    private var leftWing: some View {
+    private var collapsedView: some View {
+        // One black bar: art on the left, bars on the right, the notch (or empty
+        // gap) bridged by continuous black between them.
         HStack(spacing: 0) {
+            artworkThumb
             Spacer(minLength: 0)
-            artworkThumb.padding(.trailing, 7)
+            AudioBars(playing: coordinator.state?.isPlaying ?? false)
         }
-        .frame(width: IslandLayout.sideWidth, height: geo.notchHeight)
+        .padding(.horizontal, 11)
+        .frame(width: collapsedWidth, height: collapsedHeight)
         .background(.black)
-        .clipShape(.rect(bottomLeadingRadius: 14))
-    }
-
-    private var rightWing: some View {
-        HStack(spacing: 0) {
-            AudioBars(playing: coordinator.state?.isPlaying ?? false).padding(.leading, 9)
-            Spacer(minLength: 0)
-        }
-        .frame(width: IslandLayout.sideWidth, height: geo.notchHeight)
-        .background(.black)
-        .clipShape(.rect(bottomTrailingRadius: 14))
+        .clipShape(.rect(bottomLeadingRadius: 14, bottomTrailingRadius: 14))
     }
 
     private var artworkThumb: some View {

@@ -5,9 +5,9 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var window: NotchWindow!
+    private var container: PassthroughContainer!
     private var coordinator: PlaybackCoordinator!
     private var timer: Timer?
-    private var screenRef: NSScreen?
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
 
@@ -15,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator = PlaybackCoordinator(sources: sources)
 
         let screen = NSScreen.main
-        screenRef = screen
         let notch = screen.map {
             NotchGeometry.notchSize(
                 forScreenWidth: $0.frame.width,
@@ -33,10 +32,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
-        // Container is sized to the largest (expanded) footprint; the window
-        // resizes its content view, so the host (pinned top-center) tracks it.
-        window = NotchWindow(rootView: hostContainer(host, size: expandedSize))
-        setExpanded(false, animated: false)
+        // Fixed full-size window; only the island animates inside it. The
+        // container passes mouse events through everywhere except the island.
+        container = PassthroughContainer(frame: CGRect(origin: .zero, size: expandedSize))
+        container.addSubview(host)
+        NSLayoutConstraint.activate([
+            host.topAnchor.constraint(equalTo: container.topAnchor),
+            host.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+        ])
+
+        window = NotchWindow(rootView: container)
+        if let screen { window.place(on: screen, size: expandedSize) }
+        setExpanded(false)
         window.orderFrontRegardless()
 
         setupStatusItem()
@@ -57,22 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : CGSize(width: IslandLayout.collapsedWidth, height: IslandLayout.collapsedHeight)
     }
 
-    private func setExpanded(_ expanded: Bool, animated: Bool = true) {
-        guard let screen = screenRef else { return }
-        let s = expanded ? expandedSize : collapsedSize
-        window.setFrameCentered(on: screen, width: s.width, height: s.height, animated: animated)
-    }
-
-    /// Pin the host to the top-center of the panel; it grows downward as the
-    /// SwiftUI content (and window) expand.
-    private func hostContainer(_ host: NSView, size: CGSize) -> NSView {
-        let container = NSView(frame: CGRect(origin: .zero, size: size))
-        container.addSubview(host)
-        NSLayoutConstraint.activate([
-            host.topAnchor.constraint(equalTo: container.topAnchor),
-            host.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-        ])
-        return container
+    /// Update which region of the fixed window is mouse-interactive (top-center,
+    /// sized to the current island). No window resize → animation stays smooth.
+    private func setExpanded(_ expanded: Bool) {
+        let full = expandedSize
+        let s = expanded ? full : collapsedSize
+        container.activeRect = CGRect(
+            x: (full.width - s.width) / 2,
+            y: full.height - s.height,
+            width: s.width,
+            height: s.height
+        )
     }
 
     private func setupStatusItem() {

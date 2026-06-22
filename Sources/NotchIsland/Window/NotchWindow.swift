@@ -4,8 +4,8 @@ import SwiftUI
 enum IslandLayout {
     static let expandedWidth: CGFloat = 380
     static let expandedHeight: CGFloat = 168
-    static let sideWidth: CGFloat = 42        // each wing beside the notch
-    static let collapsedWidth: CGFloat = 220  // no-notch floating pill
+    static let sideWidth: CGFloat = 44        // art / bars zone on each side of the notch
+    static let collapsedWidth: CGFloat = 150  // no-notch floating pill
     static let collapsedHeight: CGFloat = 32
 }
 
@@ -14,6 +14,18 @@ struct IslandGeometry {
     let hasNotch: Bool
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+}
+
+/// Content view that only swallows mouse events inside `activeRect` (the visible
+/// island). Everywhere else clicks fall through to the menu bar / desktop, so a
+/// fixed full-size window never blocks anything.
+final class PassthroughContainer: NSView {
+    var activeRect: CGRect = .zero
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        guard activeRect.contains(local) else { return nil }
+        return super.hitTest(point)
+    }
 }
 
 final class NotchWindow: NSPanel {
@@ -36,21 +48,11 @@ final class NotchWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Center horizontally on `screen` with the top pinned to the screen top, so
-    /// the panel grows downward from the notch. Animated for the expand/collapse
-    /// transition.
-    func setFrameCentered(on screen: NSScreen, width: CGFloat, height: CGFloat, animated: Bool) {
-        let x = screen.frame.minX + (screen.frame.width - width) / 2
-        let y = screen.frame.maxY - height
-        let frame = CGRect(x: x, y: y, width: width, height: height)
-        if animated {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.34
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                animator().setFrame(frame, display: true)
-            }
-        } else {
-            setFrame(frame, display: true)
-        }
+    /// Center horizontally on `screen`, top pinned to the screen top. Called once
+    /// with the fixed (expanded) size — the island animates inside it.
+    func place(on screen: NSScreen, size: CGSize) {
+        let x = screen.frame.minX + (screen.frame.width - size.width) / 2
+        let y = screen.frame.maxY - size.height
+        setFrame(CGRect(x: x, y: y, width: size.width, height: size.height), display: true)
     }
 }

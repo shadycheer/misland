@@ -18,6 +18,9 @@ struct Track: Equatable {
         l.id == r.id && l.title == r.title && l.artist == r.artist
             && l.album == r.album && l.duration == r.duration
             && l.isLiked == r.isLiked
+            // Compare artwork by identity so a late-arriving cover (loaded async)
+            // counts as a change and actually reaches the UI.
+            && l.artwork === r.artwork
     }
 }
 
