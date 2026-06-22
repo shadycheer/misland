@@ -25,26 +25,33 @@ struct IslandRootView: View {
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            collapsedView
-                .opacity(expanded ? 0 : 1)
-                .animation(.easeOut(duration: 0.14), value: expanded)
-            expandedView
-                .opacity(expanded ? 1 : 0)
-                .animation(.easeOut(duration: 0.20), value: expanded)
-        }
-        // One black shape; only its size animates (on the timing curve), so it
-        // reads as the island physically popping out / snapping back.
-        .frame(width: expanded ? IslandLayout.expandedWidth : collapsedWidth,
-               height: expanded ? expandedTotalHeight : collapsedHeight,
-               alignment: .top)
-        .animation(sizeCurve, value: expanded)
-        .background(.black)
-        .clipShape(.rect(bottomLeadingRadius: 16, bottomTrailingRadius: 16))
-        .onHover { hovering in
-            expanded = hovering
-            onExpandChange(hovering)
-        }
+        // Only the black rounded shape animates its size (cheap — no content
+        // relayout). The content is the shape's overlay, so as the shape grows
+        // from the pill outward the player is revealed by the growing clip;
+        // shrinking pulls it back into the pill.
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.black)
+            .overlay(alignment: .top) {
+                ZStack(alignment: .top) {
+                    collapsedView
+                        .opacity(expanded ? 0 : 1)
+                        .animation(.easeOut(duration: 0.12), value: expanded)
+                    expandedView
+                        .opacity(expanded ? 1 : 0)
+                        .scaleEffect(expanded ? 1 : 0.92, anchor: .top)
+                        .animation(.easeOut(duration: 0.18), value: expanded)
+                }
+            }
+            .frame(width: expanded ? IslandLayout.expandedWidth : collapsedWidth,
+                   height: expanded ? expandedTotalHeight : collapsedHeight,
+                   alignment: .top)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+            .animation(sizeCurve, value: expanded)
+            .onHover { hovering in
+                expanded = hovering
+                onExpandChange(hovering)
+            }
     }
 
     // MARK: - Collapsed: art left, bars right, single bar across the notch

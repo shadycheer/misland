@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pollQueue = DispatchQueue(label: "com.shadycheer.notchisland.poll")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        terminateOtherInstances()
         coordinator = PlaybackCoordinator(sources: sources)
 
         let screen = NSScreen.main
@@ -114,6 +115,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // off-main via pollOnce, so it never stutters the UI/animation.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.pollOnce()
+        }
+    }
+
+    /// `open -n` can spawn multiple copies; extra instances each poll and draw
+    /// their own island, which looks like jank. Keep only this one.
+    private func terminateOtherInstances() {
+        let current = NSRunningApplication.current
+        for app in NSWorkspace.shared.runningApplications
+        where app.bundleIdentifier == current.bundleIdentifier
+            && app.processIdentifier != current.processIdentifier {
+            app.forceTerminate()
         }
     }
 
