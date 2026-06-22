@@ -23,13 +23,19 @@ enum NotchGeometry {
     }
 
     /// Resolve notch dimensions for a screen from AppKit APIs.
+    /// `safeAreaTop > 0` is THE notch signal (notch height). The auxiliary areas
+    /// give the exact width when available; otherwise estimate it — some configs
+    /// don't expose them, and a missing width must not flip "has notch" to false.
     static func notchSize(forScreenWidth width: CGFloat,
                           safeAreaTop: CGFloat,
                           leftArea: CGRect?, rightArea: CGRect?) -> CGSize {
-        guard safeAreaTop > 0, let left = leftArea, let right = rightArea else {
-            return .zero
+        guard safeAreaTop > 0 else { return .zero }
+        let notchWidth: CGFloat
+        if let left = leftArea, let right = rightArea {
+            notchWidth = max(0, width - left.width - right.width)
+        } else {
+            notchWidth = 200 // typical MacBook notch width when aux areas are unavailable
         }
-        let notchWidth = width - left.width - right.width
-        return CGSize(width: max(0, notchWidth), height: safeAreaTop)
+        return CGSize(width: notchWidth, height: safeAreaTop)
     }
 }

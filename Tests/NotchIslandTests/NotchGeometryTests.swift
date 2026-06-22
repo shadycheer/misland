@@ -17,6 +17,28 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertEqual(g.collapsedFrame.maxY, 982, accuracy: 0.5)
     }
 
+    func test_notchSize_usesSafeAreaTopAsSignal_estimatesWidthWhenAuxMissing() {
+        let s = NotchGeometry.notchSize(forScreenWidth: 1512, safeAreaTop: 38,
+                                        leftArea: nil, rightArea: nil)
+        XCTAssertEqual(s.height, 38)
+        XCTAssertGreaterThan(s.width, 0)   // must NOT collapse to zero (= "no notch")
+    }
+
+    func test_notchSize_computesWidthFromAuxAreas() {
+        let s = NotchGeometry.notchSize(
+            forScreenWidth: 1512, safeAreaTop: 38,
+            leftArea: CGRect(x: 0, y: 0, width: 656, height: 38),
+            rightArea: CGRect(x: 856, y: 0, width: 656, height: 38))
+        XCTAssertEqual(s.width, 200, accuracy: 0.5)
+        XCTAssertEqual(s.height, 38)
+    }
+
+    func test_notchSize_zeroWhenNoSafeArea() {
+        let s = NotchGeometry.notchSize(forScreenWidth: 1920, safeAreaTop: 0,
+                                        leftArea: nil, rightArea: nil)
+        XCTAssertEqual(s, .zero)
+    }
+
     func test_noNotch_fallsBackToFloatingCenteredPill() {
         let g = NotchGeometry.layout(
             screenWidth: 1920, screenTop: 1080,

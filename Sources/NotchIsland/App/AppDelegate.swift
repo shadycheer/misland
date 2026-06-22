@@ -16,7 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         terminateOtherInstances()
         coordinator = PlaybackCoordinator(sources: sources)
 
-        let screen = NSScreen.main
+        // Prefer the built-in notched screen (NSScreen.main follows keyboard
+        // focus, which may be an external display).
+        let screen = NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main
         let notch = screen.map {
             NotchGeometry.notchSize(
                 forScreenWidth: $0.frame.width,
