@@ -21,10 +21,10 @@ struct IslandRootView: View {
             } else {
                 CollapsedPill(track: coordinator.track,
                               isPlaying: coordinator.state?.isPlaying ?? false)
-                    .frame(width: 220)
+                    .frame(width: IslandLayout.collapsedWidth)
             }
         }
-        .clipShape(.rect(bottomLeadingRadius: 20, bottomTrailingRadius: 20))
+        .clipShape(.rect(bottomLeadingRadius: 18, bottomTrailingRadius: 18))
         .onHover { hovering in
             withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
                 expanded = hovering

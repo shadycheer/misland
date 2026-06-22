@@ -12,16 +12,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         coordinator = PlaybackCoordinator(sources: sources)
 
+        let screen = NSScreen.main
+        let notchHeight = screen.map {
+            NotchGeometry.notchSize(
+                forScreenWidth: $0.frame.width,
+                safeAreaTop: $0.safeAreaInsets.top,
+                leftArea: $0.auxiliaryTopLeftArea,
+                rightArea: $0.auxiliaryTopRightArea
+            ).height
+        } ?? 0
+        // On notch-less displays leave a small gap below the menu bar.
+        let topInset = notchHeight > 0 ? notchHeight : 6
+        let contentHeight = topInset + IslandLayout.expandedHeight
+
         let canLike = sources.contains { $0.canSetLiked }
         let host = NSHostingView(rootView:
             IslandRootView(coordinator: coordinator, canLike: canLike)
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
-        window = NotchWindow(rootView: hostContainer(host))
-        if let screen = NSScreen.main {
-            window.reposition(on: screen, size: CGSize(width: 220, height: 32))
-        }
+        window = NotchWindow(rootView: hostContainer(host, topInset: topInset, height: contentHeight))
+        if let screen { window.place(on: screen, contentHeight: contentHeight) }
         window.orderFrontRegardless()
 
         setupStatusItem()
@@ -30,13 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.refresh()
     }
 
-    /// Wraps the hosting view pinned to the top-center of the panel so the
-    /// island grows downward from the notch.
-    private func hostContainer(_ host: NSView) -> NSView {
-        let container = NSView(frame: CGRect(x: 0, y: 0, width: 430, height: 240))
+    /// Wraps the hosting view pinned just below the notch and centered, so the
+    /// island grows downward from the notch's bottom edge.
+    private func hostContainer(_ host: NSView, topInset: CGFloat, height: CGFloat) -> NSView {
+        let container = NSView(frame: CGRect(x: 0, y: 0, width: IslandLayout.expandedWidth, height: height))
         container.addSubview(host)
         NSLayoutConstraint.activate([
-            host.topAnchor.constraint(equalTo: container.topAnchor),
+            host.topAnchor.constraint(equalTo: container.topAnchor, constant: topInset),
             host.centerXAnchor.constraint(equalTo: container.centerXAnchor),
         ])
         return container
@@ -65,7 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startPolling() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // Cheap now that artwork is cached — poll twice a second so the
+        // progress bar advances smoothly.
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.coordinator.refresh()
         }
     }

@@ -11,70 +11,95 @@ struct ExpandedPlayer: View {
     let onToggleLike: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 artwork
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(track?.title ?? "Not playing")
-                        .font(.system(size: 17, weight: .medium))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track?.title ?? "未在播放")
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white).lineLimit(1)
                     Text(track?.artist ?? "")
-                        .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
                     Text(track?.album ?? "")
                         .font(.system(size: 11)).foregroundStyle(.white.opacity(0.4)).lineLimit(1)
+                    Spacer(minLength: 0)
                 }
-                Spacer()
+                Spacer(minLength: 4)
                 if canLike {
                     Button(action: onToggleLike) {
                         Image(systemName: (track?.isLiked ?? false) ? "heart.fill" : "heart")
-                            .foregroundStyle((track?.isLiked ?? false) ? .pink : .white)
-                    }.buttonStyle(.plain)
+                            .font(.system(size: 15))
+                            .foregroundStyle((track?.isLiked ?? false) ? .pink : .white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .frame(height: 64)
+
             progress
             transport
         }
-        .padding(16)
-        .frame(width: 430, height: 200)
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 14)
+        .frame(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight, alignment: .top)
         .background(.black)
     }
 
     @ViewBuilder private var artwork: some View {
-        if let img = track?.artwork {
-            Image(nsImage: img).resizable().frame(width: 74, height: 74)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-        } else {
-            RoundedRectangle(cornerRadius: 12).fill(.gray).frame(width: 74, height: 74)
+        Group {
+            if let img = track?.artwork {
+                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Color.white.opacity(0.12)
+            }
         }
+        .frame(width: 64, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var progress: some View {
         let pos = state?.position ?? 0
         let dur = max(track?.duration ?? 1, 1)
-        return VStack(spacing: 4) {
-            Slider(value: Binding(
-                get: { min(pos / dur, 1) },
-                set: { onSeek($0 * dur) }
-            )).tint(.white)
+        let frac = min(max(pos / dur, 0), 1)
+        return VStack(spacing: 5) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.18)).frame(height: 4)
+                    Capsule().fill(.white.opacity(0.9))
+                        .frame(width: max(0, geo.size.width * frac), height: 4)
+                }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+                    let f = min(max(v.location.x / geo.size.width, 0), 1)
+                    onSeek(Double(f) * dur)
+                })
+            }
+            .frame(height: 12)
             HStack {
-                Text(fmt(pos)).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+                Text(fmt(pos)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
                 Spacer()
-                Text(fmt(dur)).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+                Text(fmt(dur)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
             }
         }
     }
 
     private var transport: some View {
-        HStack(spacing: 28) {
-            Spacer()
-            Button(action: onPrev) { Image(systemName: "backward.fill") }.buttonStyle(.plain)
+        HStack(spacing: 36) {
+            Button(action: onPrev) {
+                Image(systemName: "backward.fill").font(.system(size: 15))
+            }.buttonStyle(.plain)
             Button(action: onPlayPause) {
                 Image(systemName: (state?.isPlaying ?? false) ? "pause.fill" : "play.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: 20))
             }.buttonStyle(.plain)
-            Button(action: onNext) { Image(systemName: "forward.fill") }.buttonStyle(.plain)
-            Spacer()
-        }.foregroundStyle(.white)
+            Button(action: onNext) {
+                Image(systemName: "forward.fill").font(.system(size: 15))
+            }.buttonStyle(.plain)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
     }
 
     private func fmt(_ s: TimeInterval) -> String {

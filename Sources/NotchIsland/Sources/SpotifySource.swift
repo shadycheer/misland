@@ -15,21 +15,37 @@ final class SpotifySource: NowPlayingSource {
             .contains { $0.bundleIdentifier == bundleID }
     }
 
+    // Artwork comes over the network for Spotify — fetch once per track on a
+    // background queue and cache it, never on the 1s refresh tick.
+    private var artCacheID: String?
+    private var artCache: NSImage?
+
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack, let name = t.name else { return nil }
+        let id = t.id ?? name
         let durMs = t.duration ?? 0
-        var artwork: NSImage?
-        if let urlStr = t.artworkUrl, let url = URL(string: urlStr),
-           let data = try? Data(contentsOf: url) {
-            artwork = NSImage(data: data)
+        if id != artCacheID {
+            artCacheID = id
+            artCache = nil
+            if let urlStr = t.artworkUrl, let url = URL(string: urlStr) {
+                let cacheID = id
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    guard let data = try? Data(contentsOf: url),
+                          let img = NSImage(data: data) else { return }
+                    DispatchQueue.main.async {
+                        guard self?.artCacheID == cacheID else { return }
+                        self?.artCache = img
+                    }
+                }
+            }
         }
         return Track(
-            id: t.id ?? name,
+            id: id,
             title: name,
             artist: t.artist ?? "",
             album: t.album ?? "",
             duration: Double(durMs) / 1000.0,
-            artwork: artwork,
+            artwork: artCache,
             isLiked: nil
         )
     }

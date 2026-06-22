@@ -15,17 +15,25 @@ final class AppleMusicSource: NowPlayingSource {
             .contains { $0.bundleIdentifier == bundleID }
     }
 
+    // Artwork is expensive to read/decode; cache it per track id so the 1s
+    // refresh tick doesn't re-fetch it every second.
+    private var artCacheID: String?
+    private var artCache: NSImage?
+
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack, let name = t.name else { return nil }
-        var artwork: NSImage?
-        if let arts = t.artworks, let first = arts.first { artwork = first.data }
+        let id = t.id.map(String.init) ?? name
+        if id != artCacheID {
+            artCacheID = id
+            artCache = (t.artworks?.first?.data)
+        }
         return Track(
-            id: t.id.map(String.init) ?? name,
+            id: id,
             title: name,
             artist: t.artist ?? "",
             album: t.album ?? "",
             duration: t.duration ?? 0,
-            artwork: artwork,
+            artwork: artCache,
             isLiked: t.loved ?? false
         )
     }

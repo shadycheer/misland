@@ -25,11 +25,13 @@ final class PlaybackCoordinator {
         let active = resolveActiveSource()
         activeKind = active?.kind
         if let active, let t = active.currentTrack(), let st = active.currentState() {
-            track = t
-            state = st
+            // Assign only on change so the artwork Image isn't rebuilt every
+            // tick. State (position) changes each tick — that's expected.
+            if t != track { track = t }
+            if st != state { state = st }
         } else {
-            track = nil
-            state = nil
+            if track != nil { track = nil }
+            if state != nil { state = nil }
         }
     }
 

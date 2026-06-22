@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+enum IslandLayout {
+    static let expandedWidth: CGFloat = 372
+    static let expandedHeight: CGFloat = 168
+    static let collapsedWidth: CGFloat = 200
+    static let collapsedHeight: CGFloat = 32
+}
+
 final class NotchWindow: NSPanel {
     init(rootView: NSView) {
         super.init(
@@ -21,26 +28,13 @@ final class NotchWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Position centered against the notch / top of the given screen.
-    func reposition(on screen: NSScreen, size: CGSize) {
-        let notch = NotchGeometry.notchSize(
-            forScreenWidth: screen.frame.width,
-            safeAreaTop: screen.safeAreaInsets.top,
-            leftArea: screen.auxiliaryTopLeftArea,
-            rightArea: screen.auxiliaryTopRightArea
-        )
-        let layout = NotchGeometry.layout(
-            screenWidth: screen.frame.width,
-            screenTop: screen.frame.maxY,
-            notchWidth: notch.width,
-            notchHeight: notch.height,
-            collapsedSize: size
-        )
-        setFrame(CGRect(
-            x: screen.frame.minX + layout.collapsedFrame.minX,
-            y: layout.collapsedFrame.minY - (240 - size.height),
-            width: max(size.width, 430),
-            height: 240
-        ), display: true)
+    /// Center the panel horizontally on the screen and pin its top to the very
+    /// top of the screen, so the (black) content fuses with the notch above it.
+    func place(on screen: NSScreen, contentHeight: CGFloat) {
+        let w = IslandLayout.expandedWidth
+        let h = contentHeight
+        let x = screen.frame.minX + (screen.frame.width - w) / 2
+        let y = screen.frame.maxY - h
+        setFrame(CGRect(x: x, y: y, width: w, height: h), display: true)
     }
 }
