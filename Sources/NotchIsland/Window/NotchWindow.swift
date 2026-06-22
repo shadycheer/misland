@@ -41,7 +41,7 @@ final class NotchWindow: NSPanel {
         isOpaque = false
         hasShadow = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        ignoresMouseEvents = false
+        ignoresMouseEvents = true  // click-through by default; the app enables it only over the island
         contentView = rootView
     }
 

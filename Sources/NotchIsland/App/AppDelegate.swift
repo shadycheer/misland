@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
     private let pollQueue = DispatchQueue(label: "com.shadycheer.notchisland.poll")
+    private var islandScreenRect: CGRect = .zero   // current interactive area, screen coords
+    private var mouseMonitors: [Any] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherInstances()
@@ -51,9 +53,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderFrontRegardless()
 
         setupStatusItem()
+        setupMouseMonitors()
         observeDistributedNotifications()
         startPolling()
         pollOnce()
+    }
+
+    /// The window is a fixed full-size overlay; to let clicks reach apps below
+    /// everywhere except the island, watch the global cursor and toggle
+    /// ignoresMouseEvents — the only reliable cross-app / fullscreen passthrough.
+    /// (mouseMoved monitors need no special permission.)
+    private func setupMouseMonitors() {
+        let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
+            self?.updateClickThrough()
+        }
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+            self?.updateClickThrough()
+            return event
+        }
+        mouseMonitors = [global, local].compactMap { $0 }
+        updateClickThrough()
+    }
+
+    private func updateClickThrough() {
+        let shouldIgnore = !islandScreenRect.contains(NSEvent.mouseLocation)
+        if window.ignoresMouseEvents != shouldIgnore {
+            window.ignoresMouseEvents = shouldIgnore
+        }
     }
 
     /// Read the players off the main thread (ScriptingBridge is synchronous IPC),
@@ -84,12 +110,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setExpanded(_ expanded: Bool) {
         let full = expandedSize
         let s = expanded ? full : collapsedSize
-        container.activeRect = CGRect(
+        let rect = CGRect(
             x: (full.width - s.width) / 2,
             y: full.height - s.height,
             width: s.width,
             height: s.height
         )
+        container.activeRect = rect
+        // Same rect in screen coordinates, for the click-through monitor.
+        islandScreenRect = CGRect(
+            x: window.frame.minX + rect.minX,
+            y: window.frame.minY + rect.minY,
+            width: rect.width,
+            height: rect.height
+        )
+        updateClickThrough()
     }
 
     private func setupStatusItem() {
