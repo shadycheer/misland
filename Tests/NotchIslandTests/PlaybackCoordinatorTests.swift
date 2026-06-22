@@ -53,6 +53,25 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertEqual(music.likedSetTo, true)
     }
 
+    func test_whenActivePauses_fallsToTheOtherPlayingSource() {
+        let spotify = MockNowPlayingSource(kind: .spotify)
+        let music = MockNowPlayingSource(kind: .appleMusic)
+        spotify.track = makeTrack("s1")
+        spotify.state = PlaybackState(isPlaying: true, position: 0, source: .spotify)
+        music.track = makeTrack("m1")
+        music.state = PlaybackState(isPlaying: false, position: 0, source: .appleMusic)
+
+        let c = PlaybackCoordinator(sources: [spotify, music])
+        c.refresh()
+        XCTAssertEqual(c.state?.source, .spotify)   // only spotify playing
+
+        // Spotify pauses, Apple Music starts playing → island follows Apple Music.
+        spotify.state = PlaybackState(isPlaying: false, position: 10, source: .spotify)
+        music.state = PlaybackState(isPlaying: true, position: 0, source: .appleMusic)
+        c.refresh()
+        XCTAssertEqual(c.state?.source, .appleMusic)
+    }
+
     func test_noSourcePlaying_clearsTrack() {
         let spotify = MockNowPlayingSource(kind: .spotify, isRunning: false)
         let c = PlaybackCoordinator(sources: [spotify])

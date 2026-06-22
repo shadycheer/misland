@@ -9,6 +9,11 @@ final class PlaybackCoordinator {
 
     @ObservationIgnored private let sources: [NowPlayingSource]
     @ObservationIgnored private var activeKind: SourceKind?
+    // "Most recently active wins": a monotonic counter stamped whenever a source
+    // starts playing or changes track. Highest stamp among playing sources wins.
+    @ObservationIgnored private var prev: [SourceKind: (playing: Bool, trackID: String?)] = [:]
+    @ObservationIgnored private var activation: [SourceKind: Int] = [:]
+    @ObservationIgnored private var tick = 0
 
     init(sources: [NowPlayingSource]) {
         self.sources = sources
@@ -34,6 +39,18 @@ final class PlaybackCoordinator {
             guard src.isRunning else { return Read(source: src, state: nil, track: nil) }
             return Read(source: src, state: src.currentState(), track: src.currentTrack())
         }
+        // Stamp an activation whenever a source becomes playing or changes track.
+        for r in reads {
+            let kind = r.source.kind
+            let playing = r.state?.isPlaying ?? false
+            let id = r.track?.id
+            let was = prev[kind]
+            if playing && (was?.playing != true || was?.trackID != id) {
+                tick += 1
+                activation[kind] = tick
+            }
+            prev[kind] = (playing, id)
+        }
         let active = selectActive(reads)
         activeKind = active?.source.kind
         if let active, let t = active.track, let st = active.state {
@@ -42,13 +59,18 @@ final class PlaybackCoordinator {
         return Snapshot(track: nil, state: nil, canLike: false)
     }
 
-    /// Sticky active source if still playing; else first playing; else first with a track.
+    /// Among currently-playing sources, the most recently activated wins. If
+    /// none is playing, keep the last active (sticky); else the first with a track.
     private func selectActive(_ reads: [Read]) -> Read? {
-        if let k = activeKind, let r = reads.first(where: { $0.source.kind == k }),
-           r.state?.isPlaying == true {
+        let playing = reads.filter { $0.state?.isPlaying == true }
+        if let best = playing.max(by: {
+            (activation[$0.source.kind] ?? 0) < (activation[$1.source.kind] ?? 0)
+        }) {
+            return best
+        }
+        if let k = activeKind, let r = reads.first(where: { $0.source.kind == k && $0.track != nil }) {
             return r
         }
-        if let playing = reads.first(where: { $0.state?.isPlaying == true }) { return playing }
         return reads.first { $0.track != nil }
     }
 
@@ -65,7 +87,10 @@ final class PlaybackCoordinator {
     /// Promote a source that just signalled a change (most-recently-active wins).
     /// readSnapshot validates it's still playing before honoring the stickiness.
     func sourceDidSignal(_ kind: SourceKind) {
-        activeKind = kind
+        // A change notification = a fresh activation (validated against actual
+        // playing state in selectActive, so signalling a paused source is safe).
+        tick += 1
+        activation[kind] = tick
     }
 
     func playPause() { activeSource?.playPause() }
