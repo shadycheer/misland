@@ -2,10 +2,18 @@ import AppKit
 import SwiftUI
 
 enum IslandLayout {
-    static let expandedWidth: CGFloat = 372
+    static let expandedWidth: CGFloat = 380
     static let expandedHeight: CGFloat = 168
-    static let collapsedWidth: CGFloat = 200
+    static let sideWidth: CGFloat = 42        // each wing beside the notch
+    static let collapsedWidth: CGFloat = 220  // no-notch floating pill
     static let collapsedHeight: CGFloat = 32
+}
+
+/// Resolved notch metrics for the active screen.
+struct IslandGeometry {
+    let hasNotch: Bool
+    let notchWidth: CGFloat
+    let notchHeight: CGFloat
 }
 
 final class NotchWindow: NSPanel {
@@ -28,13 +36,21 @@ final class NotchWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Center the panel horizontally on the screen and pin its top to the very
-    /// top of the screen, so the (black) content fuses with the notch above it.
-    func place(on screen: NSScreen, contentHeight: CGFloat) {
-        let w = IslandLayout.expandedWidth
-        let h = contentHeight
-        let x = screen.frame.minX + (screen.frame.width - w) / 2
-        let y = screen.frame.maxY - h
-        setFrame(CGRect(x: x, y: y, width: w, height: h), display: true)
+    /// Center horizontally on `screen` with the top pinned to the screen top, so
+    /// the panel grows downward from the notch. Animated for the expand/collapse
+    /// transition.
+    func setFrameCentered(on screen: NSScreen, width: CGFloat, height: CGFloat, animated: Bool) {
+        let x = screen.frame.minX + (screen.frame.width - width) / 2
+        let y = screen.frame.maxY - height
+        let frame = CGRect(x: x, y: y, width: width, height: height)
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.34
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                animator().setFrame(frame, display: true)
+            }
+        } else {
+            setFrame(frame, display: true)
+        }
     }
 }

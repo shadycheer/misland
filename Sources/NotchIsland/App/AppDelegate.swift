@@ -7,12 +7,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NotchWindow!
     private var coordinator: PlaybackCoordinator!
     private var timer: Timer?
+    private var screenRef: NSScreen?
+    private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         coordinator = PlaybackCoordinator(sources: sources)
 
         let screen = NSScreen.main
+        screenRef = screen
         let notch = screen.map {
             NotchGeometry.notchSize(
                 forScreenWidth: $0.frame.width,
@@ -21,19 +24,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 rightArea: $0.auxiliaryTopRightArea
             )
         } ?? .zero
-        // Black strip behind the notch so the panel fuses with it (0 = no notch).
-        let topInset = notch.height
-        let collapsedWidth = notch.width > 0 ? notch.width : IslandLayout.collapsedWidth
-        let contentHeight = topInset + IslandLayout.expandedHeight
+        geo = IslandGeometry(hasNotch: notch.height > 0,
+                             notchWidth: notch.width, notchHeight: notch.height)
 
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator, topInset: topInset, collapsedWidth: collapsedWidth)
+            IslandRootView(coordinator: coordinator, geo: geo,
+                           onExpandChange: { [weak self] in self?.setExpanded($0) })
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
-        // Pin the host to the very top so its black top edge fuses with the notch.
-        window = NotchWindow(rootView: hostContainer(host, height: contentHeight))
-        if let screen { window.place(on: screen, contentHeight: contentHeight) }
+        // Container is sized to the largest (expanded) footprint; the window
+        // resizes its content view, so the host (pinned top-center) tracks it.
+        window = NotchWindow(rootView: hostContainer(host, size: expandedSize))
+        setExpanded(false, animated: false)
         window.orderFrontRegardless()
 
         setupStatusItem()
@@ -42,11 +45,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.refresh()
     }
 
-    /// Wraps the hosting view pinned to the very top-center of the panel; the
-    /// view itself reserves the notch height internally so the panel's black top
-    /// edge fuses with the notch.
-    private func hostContainer(_ host: NSView, height: CGFloat) -> NSView {
-        let container = NSView(frame: CGRect(x: 0, y: 0, width: IslandLayout.expandedWidth, height: height))
+    private var expandedSize: CGSize {
+        geo.hasNotch
+            ? CGSize(width: IslandLayout.expandedWidth, height: geo.notchHeight + IslandLayout.expandedHeight)
+            : CGSize(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight)
+    }
+
+    private var collapsedSize: CGSize {
+        geo.hasNotch
+            ? CGSize(width: geo.notchWidth + 2 * IslandLayout.sideWidth, height: geo.notchHeight)
+            : CGSize(width: IslandLayout.collapsedWidth, height: IslandLayout.collapsedHeight)
+    }
+
+    private func setExpanded(_ expanded: Bool, animated: Bool = true) {
+        guard let screen = screenRef else { return }
+        let s = expanded ? expandedSize : collapsedSize
+        window.setFrameCentered(on: screen, width: s.width, height: s.height, animated: animated)
+    }
+
+    /// Pin the host to the top-center of the panel; it grows downward as the
+    /// SwiftUI content (and window) expand.
+    private func hostContainer(_ host: NSView, size: CGSize) -> NSView {
+        let container = NSView(frame: CGRect(origin: .zero, size: size))
         container.addSubview(host)
         NSLayoutConstraint.activate([
             host.topAnchor.constraint(equalTo: container.topAnchor),
