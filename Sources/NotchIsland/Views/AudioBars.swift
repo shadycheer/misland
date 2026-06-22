@@ -2,27 +2,36 @@ import SwiftUI
 
 struct AudioBars: View {
     var playing: Bool
-    @State private var phase = 0.0
-    private let timer = Timer.publish(every: 0.18, on: .main, in: .common).autoconnect()
+
+    private let count = 4
+    private let phase: [Double] = [0.0, 1.3, 2.4, 0.7] // desync the bars
+    private let minH: CGFloat = 4
+    private let maxH: CGFloat = 15
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<4, id: \.self) { i in
-                Capsule()
-                    .fill(.white)
-                    .frame(width: 3, height: barHeight(i))
+        Group {
+            if playing {
+                // .animation drives at the display refresh rate → genuinely
+                // smooth, unlike a low-frequency Timer.
+                TimelineView(.animation) { timeline in
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    bars { i in
+                        let v = (sin(t * 7 + phase[i]) + 1) / 2   // 0…1
+                        return minH + CGFloat(v) * (maxH - minH)
+                    }
+                }
+            } else {
+                bars { [7, 12, 6, 10][$0 % 4] } // resting equalizer
             }
         }
-        .frame(height: 14, alignment: .bottom)
-        .onReceive(timer) { _ in if playing { phase += 0.18 } }
+        .frame(height: maxH, alignment: .bottom)
     }
 
-    private func barHeight(_ i: Int) -> CGFloat {
-        guard playing else {
-            // Static "resting equalizer" so paused state isn't four flat dots.
-            return [7, 12, 6, 10][i % 4]
+    private func bars(_ height: @escaping (Int) -> CGFloat) -> some View {
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule().fill(.white).frame(width: 3, height: height(i))
+            }
         }
-        let v = sin(phase * 3 + Double(i)) * 0.5 + 0.5
-        return 4 + v * 10
     }
 }

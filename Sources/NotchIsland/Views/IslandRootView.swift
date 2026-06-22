@@ -28,14 +28,8 @@ struct IslandRootView: View {
     private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
-    // Top corners square so the island fuses with the notch / screen top; only
-    // the bottom corners are rounded.
-    private var radii: RectangleCornerRadii {
-        .init(topLeading: 0, bottomLeading: 20, bottomTrailing: 20, topTrailing: 0)
-    }
-
     var body: some View {
-        let shape = UnevenRoundedRectangle(cornerRadii: radii, style: .continuous)
+        let shape = NotchShape(topRadius: 10, bottomRadius: 18)
         shape
             .fill(.black)
             .overlay(alignment: .top) {
