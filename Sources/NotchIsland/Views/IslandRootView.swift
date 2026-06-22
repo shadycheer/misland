@@ -77,10 +77,21 @@ struct IslandRootView: View {
     // MARK: - Collapsed: art left, bars right, single bar across the notch
 
     private var collapsedView: some View {
-        HStack(spacing: 0) {
-            artworkThumb
-            Spacer(minLength: 0)
-            AudioBars(playing: coordinator.state?.isPlaying ?? false)
+        Group {
+            if geo.hasNotch {
+                // Flank the camera: art left, bars right, notch in the gap.
+                HStack(spacing: 0) {
+                    artworkThumb
+                    Spacer(minLength: 0)
+                    AudioBars(playing: coordinator.state?.isPlaying ?? false)
+                }
+            } else {
+                // No notch: compact pill, art + bars together (no empty gap).
+                HStack(spacing: 9) {
+                    artworkThumb
+                    AudioBars(playing: coordinator.state?.isPlaying ?? false)
+                }
+            }
         }
         .padding(.horizontal, 10)
         .frame(width: collapsedWidth, height: collapsedHeight)
@@ -89,13 +100,13 @@ struct IslandRootView: View {
     private var artworkThumb: some View {
         Group {
             if let img = coordinator.track?.artwork {
-                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
                 Color.white.opacity(0.18)
             }
         }
-        .frame(width: 22, height: 22)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(width: 24, height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     // MARK: - Expanded: full player below the notch

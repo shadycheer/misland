@@ -49,13 +49,13 @@ struct ExpandedPlayer: View {
     @ViewBuilder private var artwork: some View {
         Group {
             if let img = track?.artwork {
-                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
                 Color.white.opacity(0.12)
             }
         }
         .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var progress: some View {
