@@ -19,7 +19,13 @@ enum NeteaseAXProbe {
             return "网易云未运行"
         }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        var out = "=== NetEase AX dump ===\n"
+        // CEF/Electron apps build their web AX tree lazily. Setting these tells
+        // Chromium to expose the full DOM accessibility tree (the song lives there).
+        AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        Thread.sleep(forTimeInterval: 0.8) // let the tree build
+
+        var out = "=== NetEase AX dump (manual accessibility) ===\n"
         var count = 0
         walk(axApp, 0, &out, &count)
         out += "=== scanned \(count) elements ===\n"
