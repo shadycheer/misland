@@ -3,12 +3,18 @@ import SwiftUI
 struct IslandRootView: View {
     @State var coordinator: PlaybackCoordinator
     let geo: IslandGeometry
-    /// Called when hover state flips so the window can update its hit region.
+    /// Called when the visible (expanded) state flips so the window can update
+    /// its mouse-interactive region.
     let onExpandChange: (Bool) -> Void
-    @State private var expanded = false
+
+    @State private var hovering = false
+    @State private var peeking = false
+    @State private var peekTask: DispatchWorkItem?
+
+    /// Expanded when the pointer is over it OR during an auto-peek.
+    private var expanded: Bool { hovering || peeking }
 
     private var notchInset: CGFloat { geo.hasNotch ? geo.notchHeight : 0 }
-
     private var collapsedWidth: CGFloat {
         geo.hasNotch ? geo.notchWidth + 2 * IslandLayout.sideWidth : IslandLayout.collapsedWidth
     }
@@ -17,19 +23,20 @@ struct IslandRootView: View {
     }
     private var expandedTotalHeight: CGFloat { notchInset + IslandLayout.expandedHeight }
 
-    // Cubic-bezier (cubic-bezier-style) timing curves — tweak the 4 control
-    // numbers + duration to retune the feel. Expand pops out with a slight
-    // overshoot; collapse snaps back quicker with no bounce.
+    // Cubic-bezier timing — expand pops with a slight overshoot, collapse snaps back.
     private let expandCurve = Animation.timingCurve(0.2, 1.25, 0.3, 1.0, duration: 0.42)
     private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
+    // Top corners square so the island fuses with the notch / screen top; only
+    // the bottom corners are rounded.
+    private var radii: RectangleCornerRadii {
+        .init(topLeading: 0, bottomLeading: 20, bottomTrailing: 20, topTrailing: 0)
+    }
+
     var body: some View {
-        // Only the black rounded shape animates its size (cheap — no content
-        // relayout). The content is the shape's overlay, so as the shape grows
-        // from the pill outward the player is revealed by the growing clip;
-        // shrinking pulls it back into the pill.
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let shape = UnevenRoundedRectangle(cornerRadii: radii, style: .continuous)
+        shape
             .fill(.black)
             .overlay(alignment: .top) {
                 ZStack(alignment: .top) {
@@ -45,13 +52,32 @@ struct IslandRootView: View {
             .frame(width: expanded ? IslandLayout.expandedWidth : collapsedWidth,
                    height: expanded ? expandedTotalHeight : collapsedHeight,
                    alignment: .top)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(shape)
             .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .animation(sizeCurve, value: expanded)
-            .onHover { hovering in
-                expanded = hovering
-                onExpandChange(hovering)
+            .onHover { h in
+                hovering = h
+                syncWindow()
             }
+            .onChange(of: coordinator.track?.id) { _, newID in
+                if newID != nil { peek() }
+            }
+    }
+
+    private func syncWindow() { onExpandChange(expanded) }
+
+    /// Auto-peek: expand briefly on a track change, then collapse after 2s
+    /// (unless the pointer is on it).
+    private func peek() {
+        peekTask?.cancel()
+        peeking = true
+        syncWindow()
+        let task = DispatchWorkItem {
+            peeking = false
+            syncWindow()
+        }
+        peekTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: task)
     }
 
     // MARK: - Collapsed: art left, bars right, single bar across the notch
@@ -62,7 +88,7 @@ struct IslandRootView: View {
             Spacer(minLength: 0)
             AudioBars(playing: coordinator.state?.isPlaying ?? false)
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 10)
         .frame(width: collapsedWidth, height: collapsedHeight)
     }
 

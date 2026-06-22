@@ -26,12 +26,13 @@ struct ExpandedPlayer: View {
                 }
                 Spacer(minLength: 4)
                 if canLike {
-                    Button(action: onToggleLike) {
-                        Image(systemName: (track?.isLiked ?? false) ? "heart.fill" : "heart")
-                            .font(.system(size: 15))
-                            .foregroundStyle((track?.isLiked ?? false) ? .pink : .white.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
+                    let liked = track?.isLiked ?? false
+                    ControlButton(
+                        system: liked ? "heart.fill" : "heart",
+                        size: 15,
+                        tint: liked ? .pink : .white,
+                        action: onToggleLike
+                    )
                 }
             }
             .frame(height: 64)
@@ -86,23 +87,38 @@ struct ExpandedPlayer: View {
 
     private var transport: some View {
         HStack(spacing: 36) {
-            Button(action: onPrev) {
-                Image(systemName: "backward.fill").font(.system(size: 15))
-            }.buttonStyle(.plain)
-            Button(action: onPlayPause) {
-                Image(systemName: (state?.isPlaying ?? false) ? "pause.fill" : "play.fill")
-                    .font(.system(size: 20))
-            }.buttonStyle(.plain)
-            Button(action: onNext) {
-                Image(systemName: "forward.fill").font(.system(size: 15))
-            }.buttonStyle(.plain)
+            ControlButton(system: "backward.fill", size: 15, action: onPrev)
+            ControlButton(system: (state?.isPlaying ?? false) ? "pause.fill" : "play.fill",
+                          size: 20, action: onPlayPause)
+            ControlButton(system: "forward.fill", size: 15, action: onNext)
         }
-        .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
     }
 
     private func fmt(_ s: TimeInterval) -> String {
         let t = Int(s.rounded())
         return String(format: "%d:%02d", t / 60, t % 60)
+    }
+}
+
+/// A transport/like button with a hover highlight (brighten + slight scale).
+private struct ControlButton: View {
+    let system: String
+    let size: CGFloat
+    var tint: Color = .white
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: size))
+                .foregroundStyle(tint.opacity(hover ? 1 : 0.78))
+                .scaleEffect(hover ? 1.15 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { h in
+            withAnimation(.easeOut(duration: 0.12)) { hover = h }
+        }
     }
 }
