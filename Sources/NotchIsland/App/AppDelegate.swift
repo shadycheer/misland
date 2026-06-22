@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import ApplicationServices
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -96,8 +97,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "NotchIsland")
         let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "导出网易云 AX 树（调试）", action: #selector(dumpNetease), keyEquivalent: "d"))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit NotchIsland", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
+
+        // Ask for Accessibility once so "NotchIsland" appears in the list, which
+        // is needed to read NetEase (a CEF app's AX tree).
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(opts)
+    }
+
+    @objc private func dumpNetease() {
+        let status = NeteaseAXProbe.dump()
+        let a = NSAlert()
+        a.messageText = "网易云 AX 探测"
+        a.informativeText = status
+        a.runModal()
     }
 
     private func observeDistributedNotifications() {
