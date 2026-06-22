@@ -25,21 +25,14 @@ final class SpotifySource: NowPlayingSource {
         let id = t.id ?? name
         let durMs = t.duration ?? 0
         if id != artCacheID {
-            // Track changed: drop the old cover immediately, then fetch the new
-            // one off-main. Only lock the cache id once we have a url to fetch,
-            // so a not-yet-ready url is retried on the next tick.
+            // currentTrack() runs on the poll queue (off-main), so a synchronous
+            // fetch here is fine. Only lock the cache once we actually have an
+            // image, so a not-yet-ready / failed url is retried next tick.
             artCache = nil
-            if let urlStr = t.artworkUrl, let url = URL(string: urlStr) {
+            if let urlStr = t.artworkUrl, let url = URL(string: urlStr),
+               let data = try? Data(contentsOf: url), let img = NSImage(data: data) {
                 artCacheID = id
-                let cacheID = id
-                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                    guard let data = try? Data(contentsOf: url),
-                          let img = NSImage(data: data) else { return }
-                    DispatchQueue.main.async {
-                        guard self?.artCacheID == cacheID else { return }
-                        self?.artCache = img
-                    }
-                }
+                artCache = img
             }
         }
         return Track(

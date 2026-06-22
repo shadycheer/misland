@@ -43,7 +43,6 @@ struct ExpandedPlayer: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .frame(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight, alignment: .top)
-        .background(.black)
     }
 
     @ViewBuilder private var artwork: some View {

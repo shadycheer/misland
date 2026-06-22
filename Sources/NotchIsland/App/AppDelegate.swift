@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
+    private let pollQueue = DispatchQueue(label: "com.shadycheer.notchisland.poll")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         coordinator = PlaybackCoordinator(sources: sources)
@@ -49,7 +50,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         observeDistributedNotifications()
         startPolling()
-        coordinator.refresh()
+        pollOnce()
+    }
+
+    /// Read the players off the main thread (ScriptingBridge is synchronous IPC),
+    /// then publish to the observable coordinator on the main thread.
+    private func pollOnce(signal: SourceKind? = nil) {
+        pollQueue.async { [weak self] in
+            guard let self else { return }
+            if let signal { self.coordinator.sourceDidSignal(signal) }
+            let snapshot = self.coordinator.readSnapshot()
+            DispatchQueue.main.async { self.coordinator.publish(snapshot) }
+        }
     }
 
     private var expandedSize: CGSize {
@@ -89,21 +101,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let dnc = DistributedNotificationCenter.default()
         dnc.addObserver(forName: .init("com.spotify.client.PlaybackStateChanged"),
                         object: nil, queue: .main) { [weak self] _ in
-            self?.coordinator.sourceDidSignal(.spotify)
-            self?.coordinator.refresh()
+            self?.pollOnce(signal: .spotify)
         }
         dnc.addObserver(forName: .init("com.apple.Music.playerInfo"),
                         object: nil, queue: .main) { [weak self] _ in
-            self?.coordinator.sourceDidSignal(.appleMusic)
-            self?.coordinator.refresh()
+            self?.pollOnce(signal: .appleMusic)
         }
     }
 
     private func startPolling() {
-        // Cheap now that artwork is cached — poll twice a second so the
-        // progress bar advances smoothly.
+        // Poll twice a second so the progress bar advances smoothly. Work runs
+        // off-main via pollOnce, so it never stutters the UI/animation.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.coordinator.refresh()
+            self?.pollOnce()
         }
     }
 

@@ -5,6 +5,7 @@ import Foundation
 final class PlaybackCoordinator {
     private(set) var track: Track?
     private(set) var state: PlaybackState?
+    private(set) var canLike: Bool = false
 
     @ObservationIgnored private let sources: [NowPlayingSource]
     @ObservationIgnored private var activeKind: SourceKind?
@@ -13,30 +14,40 @@ final class PlaybackCoordinator {
         self.sources = sources
     }
 
-    /// Called when a source posts a change notification — promotes it so that,
-    /// when several are playing, the most recently active wins.
+    struct Snapshot {
+        let track: Track?
+        let state: PlaybackState?
+        let canLike: Bool
+    }
+
+    /// Reads the players via ScriptingBridge. Call OFF the main thread (it does
+    /// synchronous cross-process IPC) — serialize calls on one queue.
+    func readSnapshot() -> Snapshot {
+        let active = resolveActiveSource()
+        activeKind = active?.kind
+        if let active, let t = active.currentTrack(), let st = active.currentState() {
+            return Snapshot(track: t, state: st, canLike: active.canSetLiked)
+        }
+        return Snapshot(track: nil, state: nil, canLike: false)
+    }
+
+    /// Apply a snapshot to the observable state. MAIN THREAD ONLY.
+    func publish(_ s: Snapshot) {
+        if s.track != track { track = s.track }
+        if s.state != state { state = s.state }
+        if s.canLike != canLike { canLike = s.canLike }
+    }
+
+    /// Synchronous read+publish — used by tests; the app polls off-main instead.
+    func refresh() { publish(readSnapshot()) }
+
+    /// Promote a source that just signalled a change (most-recently-active wins).
+    /// Call on the same queue as `readSnapshot`.
     func sourceDidSignal(_ kind: SourceKind) {
         if let s = source(for: kind), s.isRunning, s.currentState()?.isPlaying == true {
             activeKind = kind
         }
     }
-
-    func refresh() {
-        let active = resolveActiveSource()
-        activeKind = active?.kind
-        if let active, let t = active.currentTrack(), let st = active.currentState() {
-            // Assign only on change so the artwork Image isn't rebuilt every
-            // tick. State (position) changes each tick — that's expected.
-            if t != track { track = t }
-            if st != state { state = st }
-        } else {
-            if track != nil { track = nil }
-            if state != nil { state = nil }
-        }
-    }
-
-    /// Whether the currently active source supports liking (Spotify: false).
-    var canLike: Bool { activeSource?.canSetLiked ?? false }
 
     func playPause() { activeSource?.playPause() }
     func next() { activeSource?.next() }
