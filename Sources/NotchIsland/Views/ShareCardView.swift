@@ -35,15 +35,16 @@ struct ShareCardView: View {
     }
 
     private var cover: some View {
-        Group {
-            if let img = track.artwork {
-                Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
-            } else {
-                Color(red: 0.094, green: 0.094, blue: 0.094) // #181818
+        // Overlay+clipped fills reliably in ImageRenderer; bare
+        // .aspectRatio(.fill) can leave the image unscaled (white band).
+        Color(red: 0.094, green: 0.094, blue: 0.094) // #181818
+            .frame(width: coverW, height: coverW)
+            .overlay {
+                if let img = track.artwork {
+                    Image(nsImage: img).resizable().interpolation(.high).scaledToFill()
+                }
             }
-        }
-        .frame(width: coverW, height: coverW)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var foot: some View {
