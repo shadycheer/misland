@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct IslandRootView: View {
     @State var coordinator: PlaybackCoordinator
@@ -54,6 +55,12 @@ struct IslandRootView: View {
             // frame) — SwiftUI's hover tracking area ignores our hitTest gate,
             // so on the outer frame it would fire across the whole 380x200 window.
             .onHover { h in onHover(h) }
+            // Right-click the island for app controls — the menu-bar icon can be
+            // hidden behind the notch when the menu bar is full.
+            .contextMenu {
+                Button("偏好设置…") { PreferencesWindowController.shared.show() }
+                Button("退出 NotchIsland") { NSApplication.shared.terminate(nil) }
+            }
             .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .onChange(of: coordinator.track?.id) { _, newID in
                 if newID != nil { peek() }
