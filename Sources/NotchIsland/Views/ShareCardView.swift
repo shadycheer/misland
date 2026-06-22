@@ -1,75 +1,74 @@
 import SwiftUI
 
-/// The shareable "now playing" card, rendered to PNG by CardExporter. Inherits
-/// the spotify-card web template: big cover, title/artist/album, a background
-/// tinted by the cover's dominant colour, a platform badge, and a QR code.
+/// Faithful port of spotify-card's canvas template (src/lib/card/spotify.ts):
+/// 320pt design width, flat black, 280 square cover, 800 title, dim artist,
+/// foot = brand lockup (left) + QR (right). Rendered to PNG by CardExporter.
 struct ShareCardView: View {
     let track: Track
     let source: SourceKind?
     let qr: NSImage?
 
-    private var accent: Color {
-        switch source {
-        case .spotify: return Color(red: 0.118, green: 0.843, blue: 0.376) // Spotify green
-        case .appleMusic: return Color(red: 0.98, green: 0.23, blue: 0.43)  // Apple Music pink
-        case .none: return .white
-        }
-    }
-    private var platformName: String {
-        switch source {
-        case .spotify: return "Spotify"
-        case .appleMusic: return "Apple Music"
-        case .none: return "Now Playing"
-        }
-    }
-    private var tint: Color { Color(ArtworkColor.dominant(track.artwork)) }
+    private let designW: CGFloat = 320
+    private let pad: CGFloat = 20
+    private var coverW: CGFloat { designW - pad * 2 } // 280
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             cover
-            VStack(alignment: .leading, spacing: 6) {
-                Text(track.title).font(.system(size: 25, weight: .bold))
-                    .foregroundStyle(.white).lineLimit(2)
-                Text(track.artist).font(.system(size: 17))
-                    .foregroundStyle(.white.opacity(0.85)).lineLimit(1)
-                if !track.album.isEmpty {
-                    Text(track.album).font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.55)).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            HStack(alignment: .center) {
-                HStack(spacing: 8) {
-                    Image(systemName: "music.note")
-                    Text(platformName).font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundStyle(accent)
-                Spacer()
-                if let qr {
-                    Image(nsImage: qr).resizable().interpolation(.none)
-                        .frame(width: 60, height: 60)
-                        .padding(5).background(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
+            Spacer().frame(height: 16)
+            Text(track.title)
+                .font(.system(size: 22, weight: .heavy))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer().frame(height: 4)
+            Text(track.artist)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color(red: 0.70, green: 0.70, blue: 0.70)) // #B3B3B3
+                .lineLimit(1)
+            Spacer().frame(height: 16)
+            foot
         }
-        .padding(26)
-        .frame(width: 360, height: 520, alignment: .top)
-        .background(
-            LinearGradient(colors: [tint, tint.opacity(0.45), .black],
-                           startPoint: .top, endPoint: .bottom)
-        )
+        .frame(width: coverW, alignment: .leading)
+        .padding(pad)
+        .background(Color.black)
     }
 
-    @ViewBuilder private var cover: some View {
+    private var cover: some View {
         Group {
             if let img = track.artwork {
                 Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
-                Color.white.opacity(0.12)
+                Color(red: 0.094, green: 0.094, blue: 0.094) // #181818
             }
         }
-        .frame(width: 308, height: 308)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(width: coverW, height: coverW)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private var foot: some View {
+        HStack(alignment: .center, spacing: 0) {
+            brand
+            Spacer(minLength: 8)
+            if let qr {
+                Image(nsImage: qr).resizable().interpolation(.none)
+                    .frame(width: 38, height: 38)
+                    .padding(3)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            }
+        }
+        .frame(height: 44)
+    }
+
+    @ViewBuilder private var brand: some View {
+        if let lockup = BrandLockup.image(for: source) {
+            Image(nsImage: lockup).resizable().interpolation(.high)
+                .scaledToFit().frame(height: 24)
+        } else {
+            Text(source == .appleMusic ? "Apple Music" : "Now Playing")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+        }
     }
 }

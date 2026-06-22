@@ -11,13 +11,15 @@ enum CardExporter {
     static func export(track: Track?, source: SourceKind?) {
         guard let track else { return }
         let qr = qrImage(shareURL(track: track, source: source))
+        let scale: CGFloat = 6   // 320pt design -> 1920px PNG, matching the web export
         let renderer = ImageRenderer(content: ShareCardView(track: track, source: source, qr: qr))
-        renderer.scale = 3
+        renderer.scale = scale
         guard let cg = renderer.cgImage else { return }
 
         let rep = NSBitmapImageRep(cgImage: cg)
         guard let png = rep.representation(using: .png, properties: [:]) else { return }
-        let image = NSImage(cgImage: cg, size: NSSize(width: cg.width / 3, height: cg.height / 3))
+        let image = NSImage(cgImage: cg,
+                            size: NSSize(width: CGFloat(cg.width) / scale, height: CGFloat(cg.height) / scale))
 
         // Clipboard — instant, paste straight into chat apps.
         let pb = NSPasteboard.general
