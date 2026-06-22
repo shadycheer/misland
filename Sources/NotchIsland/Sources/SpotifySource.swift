@@ -25,9 +25,12 @@ final class SpotifySource: NowPlayingSource {
         let id = t.id ?? name
         let durMs = t.duration ?? 0
         if id != artCacheID {
-            artCacheID = id
+            // Track changed: drop the old cover immediately, then fetch the new
+            // one off-main. Only lock the cache id once we have a url to fetch,
+            // so a not-yet-ready url is retried on the next tick.
             artCache = nil
             if let urlStr = t.artworkUrl, let url = URL(string: urlStr) {
+                artCacheID = id
                 let cacheID = id
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                     guard let data = try? Data(contentsOf: url),

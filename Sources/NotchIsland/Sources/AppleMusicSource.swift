@@ -24,8 +24,15 @@ final class AppleMusicSource: NowPlayingSource {
         guard isRunning, let t = app?.currentTrack, let name = t.name else { return nil }
         let id = t.id.map(String.init) ?? name
         if id != artCacheID {
-            artCacheID = id
-            artCache = (t.artworks?.first?.data)
+            // Music.app often returns no artwork for the first moment after a
+            // track starts. Only lock the cache once we actually have an image;
+            // until then keep retrying (and don't show the previous cover).
+            if let art = t.artworks?.first?.data {
+                artCacheID = id
+                artCache = art
+            } else {
+                artCache = nil
+            }
         }
         return Track(
             id: id,

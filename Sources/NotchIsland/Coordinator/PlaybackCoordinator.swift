@@ -35,6 +35,9 @@ final class PlaybackCoordinator {
         }
     }
 
+    /// Whether the currently active source supports liking (Spotify: false).
+    var canLike: Bool { activeSource?.canSetLiked ?? false }
+
     func playPause() { activeSource?.playPause() }
     func next() { activeSource?.next() }
     func previous() { activeSource?.previous() }

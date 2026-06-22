@@ -18,7 +18,10 @@ struct AudioBars: View {
     }
 
     private func barHeight(_ i: Int) -> CGFloat {
-        guard playing else { return 4 }
+        guard playing else {
+            // Static "resting equalizer" so paused state isn't four flat dots.
+            return [7, 12, 6, 10][i % 4]
+        }
         let v = sin(phase * 3 + Double(i)) * 0.5 + 0.5
         return 4 + v * 10
     }

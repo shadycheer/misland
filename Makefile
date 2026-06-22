@@ -21,4 +21,7 @@ run: bundle
 test:
 	swift test
 
-.PHONY: build bundle run test
+watch:
+	@bash scripts/watch.sh
+
+.PHONY: build bundle run test watch

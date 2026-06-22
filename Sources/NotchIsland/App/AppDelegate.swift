@@ -25,9 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let topInset = notchHeight > 0 ? notchHeight : 6
         let contentHeight = topInset + IslandLayout.expandedHeight
 
-        let canLike = sources.contains { $0.canSetLiked }
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator, canLike: canLike)
+            IslandRootView(coordinator: coordinator)
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 

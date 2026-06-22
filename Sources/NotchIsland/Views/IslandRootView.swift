@@ -2,7 +2,6 @@ import SwiftUI
 
 struct IslandRootView: View {
     @State var coordinator: PlaybackCoordinator
-    let canLike: Bool
     @State private var expanded = false
 
     var body: some View {
@@ -11,7 +10,7 @@ struct IslandRootView: View {
                 ExpandedPlayer(
                     track: coordinator.track,
                     state: coordinator.state,
-                    canLike: canLike,
+                    canLike: coordinator.canLike,
                     onPlayPause: coordinator.playPause,
                     onNext: coordinator.next,
                     onPrev: coordinator.previous,
