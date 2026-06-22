@@ -10,6 +10,7 @@ struct IslandRootView: View {
     @State private var hovering = false
     @State private var peeking = false
     @State private var peekTask: DispatchWorkItem?
+    @State private var hoverWork: DispatchWorkItem?
 
     /// Expanded when the pointer is over it OR during an auto-peek.
     private var expanded: Bool { hovering || peeking }
@@ -47,15 +48,29 @@ struct IslandRootView: View {
                    height: expanded ? expandedTotalHeight : collapsedHeight,
                    alignment: .top)
             .clipShape(shape)
-            .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .animation(sizeCurve, value: expanded)
-            .onHover { h in
-                hovering = h
-                syncWindow()
-            }
+            // onHover MUST sit on the island-sized view (not the full host
+            // frame) — SwiftUI's hover tracking area ignores our hitTest gate,
+            // so on the outer frame it would fire across the whole 380x200 window.
+            .onHover { h in onHover(h) }
+            .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .onChange(of: coordinator.track?.id) { _, newID in
                 if newID != nil { peek() }
             }
+    }
+
+    /// Small hover-intent delay so merely passing the cursor over the island
+    /// doesn't expand it; collapse immediately on exit.
+    private func onHover(_ h: Bool) {
+        hoverWork?.cancel()
+        if h {
+            let work = DispatchWorkItem { hovering = true; syncWindow() }
+            hoverWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+        } else {
+            hovering = false
+            syncWindow()
+        }
     }
 
     private func syncWindow() { onExpandChange(expanded) }
