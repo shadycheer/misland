@@ -68,7 +68,7 @@ struct IslandRootView: View {
         if h {
             let work = DispatchWorkItem { hovering = true; syncWindow() }
             hoverWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
         } else {
             hovering = false
             syncWindow()

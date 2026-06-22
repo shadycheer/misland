@@ -3,61 +3,76 @@ import AppKit
 
 final class SpotifySource: NowPlayingSource {
     let kind: SourceKind = .spotify
-    // Like is possible iff Spotify ships its `spotify_cli` (it does on current
-    // builds). Degrades to hidden heart on old/missing installs.
     let canSetLiked = SpotifyCLI.isAvailable
 
     private let bundleID = "com.spotify.client"
-    // Create the SBApplication ONCE. Re-creating it per access reloads the SDEF
-    // and re-resolves the app via LaunchServices every time — that was the CPU sink.
     private lazy var app: SpotifyApplication? =
         SBApplication(bundleIdentifier: bundleID) as? SpotifyApplication
 
     var isRunning: Bool { app?.isRunning ?? false }
 
-    // Cache the whole Track keyed by id; re-read the full metadata (and fetch
-    // the cover) only when the track changes. Unchanged polls cost one Apple
-    // Event (the id check).
-    private var cachedID: String?
-    private var cachedTrack: Track?
-    // Liked state is queried via spotify_cli once per track and cached separately
-    // (it's a ~0.2s subprocess; keyed by uri so the 0.5s poll doesn't re-run it).
-    private var likedID: String?
+    // The slow bits (cover over the network, like-state via spotify_cli) are
+    // fetched ASYNCHRONOUSLY and cached, so currentTrack() returns metadata
+    // immediately — the island peeks the instant the track changes, and the
+    // cover / heart fill in on the next poll.
+    private let lock = NSLock()
+    private var artID: String?
+    private var art: NSImage?
+    private var fetchingArt: String?
+    private var likeID: String?
     private var liked: Bool?
+    private var fetchingLike: String?
 
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
-        guard let id = t.id else { return nil }   // 1 Apple Event; id == spotify URI
-
-        if canSetLiked && id != likedID {
-            likedID = id
-            liked = SpotifyCLI.isLiked(id)   // off-main poll queue, once per track
-        }
-
-        if id == cachedID, var cached = cachedTrack {
-            cached.isLiked = liked
-            return cached
-        }
-
+        guard let id = t.id else { return nil }
         guard let name = t.name else { return nil }
-        // Runs on the poll queue (off-main), so a synchronous cover fetch is fine.
-        var artwork: NSImage?
-        if let urlStr = t.artworkUrl, let url = URL(string: urlStr),
-           let data = try? Data(contentsOf: url), let img = NSImage(data: data) {
-            artwork = img
-        }
-        let track = Track(
+
+        lock.lock()
+        let cachedArt = (artID == id) ? art : nil
+        let cachedLiked = (likeID == id) ? liked : nil
+        let needArt = artID != id && fetchingArt != id
+        let needLike = canSetLiked && likeID != id && fetchingLike != id
+        if needArt { fetchingArt = id }
+        if needLike { fetchingLike = id }
+        lock.unlock()
+
+        if needArt { fetchArtwork(id: id, urlString: t.artworkUrl) }
+        if needLike { fetchLiked(id: id) }
+
+        return Track(
             id: id,
             title: name,
             artist: t.artist ?? "",
             album: t.album ?? "",
             duration: Double(t.duration ?? 0) / 1000.0,
-            artwork: artwork,
-            isLiked: liked
+            artwork: cachedArt,
+            isLiked: cachedLiked
         )
-        // Lock the cache only once the cover is in, else retry next poll.
-        if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
-        return track
+    }
+
+    private func fetchArtwork(id: String, urlString: String?) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var image: NSImage?
+            if let urlString, let url = URL(string: urlString),
+               let data = try? Data(contentsOf: url) {
+                image = NSImage(data: data)
+            }
+            guard let self else { return }
+            self.lock.lock()
+            self.art = image; self.artID = id; self.fetchingArt = nil
+            self.lock.unlock()
+        }
+    }
+
+    private func fetchLiked(id: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let value = SpotifyCLI.isLiked(id)
+            guard let self else { return }
+            self.lock.lock()
+            self.liked = value; self.likeID = id; self.fetchingLike = nil
+            self.lock.unlock()
+        }
     }
 
     func currentState() -> PlaybackState? {
@@ -75,9 +90,11 @@ final class SpotifySource: NowPlayingSource {
     func seek(to position: TimeInterval) {
         (app as? SBApplication)?.setValue(position, forKey: "playerPosition")
     }
+
     func setLiked(_ liked: Bool) {
-        guard let uri = likedID ?? cachedID else { return }
+        // Called off-main by the coordinator; read the live URI for accuracy.
+        guard let uri = app?.currentTrack?.id else { return }
+        lock.lock(); self.liked = liked; self.likeID = uri; lock.unlock()
         SpotifyCLI.setLiked(uri, liked)
-        self.liked = liked   // optimistic; subsequent reads reflect it immediately
     }
 }

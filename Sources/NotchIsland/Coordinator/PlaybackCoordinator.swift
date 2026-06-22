@@ -100,9 +100,9 @@ final class PlaybackCoordinator {
 
     func toggleLike() {
         guard let s = activeSource, s.canSetLiked else { return }
-        let current = track?.isLiked ?? false
-        s.setLiked(!current)
-        track?.isLiked = !current
+        let next = !(track?.isLiked ?? false)
+        track?.isLiked = next                       // optimistic, instant
+        DispatchQueue.global(qos: .userInitiated).async { s.setLiked(next) } // off-main
     }
 
     // MARK: - Selection

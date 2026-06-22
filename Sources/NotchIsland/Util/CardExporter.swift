@@ -21,26 +21,12 @@ enum CardExporter {
         let image = NSImage(cgImage: cg,
                             size: NSSize(width: CGFloat(cg.width) / scale, height: CGFloat(cg.height) / scale))
 
-        // Clipboard — instant, paste straight into chat apps.
+        // Copy to clipboard — paste straight into chat apps. Both the image and
+        // its PNG data, so apps that prefer file data also get it.
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.writeObjects([image])
-
-        // Save panel.
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = filename(track)
-        panel.allowedContentTypes = [.png]
-        panel.canCreateDirectories = true
-        NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url {
-            try? png.write(to: url)
-        }
-    }
-
-    private static func filename(_ t: Track) -> String {
-        let base = "\(t.title) - \(t.artist)"
-            .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>")).joined(separator: "_")
-        return (base.isEmpty ? "now-playing" : base) + ".png"
+        pb.setData(png, forType: .png)
     }
 
     /// A public URL to the track, for the QR code. Spotify only — Apple Music
