@@ -3,7 +3,9 @@ import AppKit
 
 final class SpotifySource: NowPlayingSource {
     let kind: SourceKind = .spotify
-    let canSetLiked = false   // no local API in v1
+    // Like is possible iff Spotify ships its `spotify_cli` (it does on current
+    // builds). Degrades to hidden heart on old/missing installs.
+    let canSetLiked = SpotifyCLI.isAvailable
 
     private let bundleID = "com.spotify.client"
     // Create the SBApplication ONCE. Re-creating it per access reloads the SDEF
@@ -18,11 +20,24 @@ final class SpotifySource: NowPlayingSource {
     // Event (the id check).
     private var cachedID: String?
     private var cachedTrack: Track?
+    // Liked state is queried via spotify_cli once per track and cached separately
+    // (it's a ~0.2s subprocess; keyed by uri so the 0.5s poll doesn't re-run it).
+    private var likedID: String?
+    private var liked: Bool?
 
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
-        guard let id = t.id else { return nil }   // 1 Apple Event
-        if id == cachedID, let cached = cachedTrack { return cached }
+        guard let id = t.id else { return nil }   // 1 Apple Event; id == spotify URI
+
+        if canSetLiked && id != likedID {
+            likedID = id
+            liked = SpotifyCLI.isLiked(id)   // off-main poll queue, once per track
+        }
+
+        if id == cachedID, var cached = cachedTrack {
+            cached.isLiked = liked
+            return cached
+        }
 
         guard let name = t.name else { return nil }
         // Runs on the poll queue (off-main), so a synchronous cover fetch is fine.
@@ -38,7 +53,7 @@ final class SpotifySource: NowPlayingSource {
             album: t.album ?? "",
             duration: Double(t.duration ?? 0) / 1000.0,
             artwork: artwork,
-            isLiked: nil
+            isLiked: liked
         )
         // Lock the cache only once the cover is in, else retry next poll.
         if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
@@ -60,5 +75,9 @@ final class SpotifySource: NowPlayingSource {
     func seek(to position: TimeInterval) {
         (app as? SBApplication)?.setValue(position, forKey: "playerPosition")
     }
-    func setLiked(_ liked: Bool) { /* unsupported in v1 */ }
+    func setLiked(_ liked: Bool) {
+        guard let uri = likedID ?? cachedID else { return }
+        SpotifyCLI.setLiked(uri, liked)
+        self.liked = liked   // optimistic; subsequent reads reflect it immediately
+    }
 }
