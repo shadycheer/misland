@@ -21,6 +21,7 @@ import AppKit
     @objc optional var currentTrack: SpotifyTrack { get }
     @objc optional var playerState: SBPlayerState { get }
     @objc optional var playerPosition: Double { get } // seconds
+    @objc optional var isRunning: Bool { get }        // cheap: SB target state
     @objc optional func playpause()
     @objc optional func nextTrack()
     @objc optional func previousTrack()
@@ -45,6 +46,7 @@ import AppKit
     @objc optional var currentTrack: MusicTrack { get }
     @objc optional var playerState: SBPlayerState { get }
     @objc optional var playerPosition: Double { get }
+    @objc optional var isRunning: Bool { get }        // cheap: SB target state
     @objc optional func playpause()
     @objc optional func nextTrack()
     @objc optional func previousTrack()

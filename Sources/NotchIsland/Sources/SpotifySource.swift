@@ -6,44 +6,43 @@ final class SpotifySource: NowPlayingSource {
     let canSetLiked = false   // no local API in v1
 
     private let bundleID = "com.spotify.client"
-    private var app: SpotifyApplication? {
+    // Create the SBApplication ONCE. Re-creating it per access reloads the SDEF
+    // and re-resolves the app via LaunchServices every time — that was the CPU sink.
+    private lazy var app: SpotifyApplication? =
         SBApplication(bundleIdentifier: bundleID) as? SpotifyApplication
-    }
 
-    var isRunning: Bool {
-        NSWorkspace.shared.runningApplications
-            .contains { $0.bundleIdentifier == bundleID }
-    }
+    var isRunning: Bool { app?.isRunning ?? false }
 
-    // Artwork comes over the network for Spotify — fetch once per track on a
-    // background queue and cache it, never on the 1s refresh tick.
-    private var artCacheID: String?
-    private var artCache: NSImage?
+    // Cache the whole Track keyed by id; re-read the full metadata (and fetch
+    // the cover) only when the track changes. Unchanged polls cost one Apple
+    // Event (the id check).
+    private var cachedID: String?
+    private var cachedTrack: Track?
 
     func currentTrack() -> Track? {
-        guard isRunning, let t = app?.currentTrack, let name = t.name else { return nil }
-        let id = t.id ?? name
-        let durMs = t.duration ?? 0
-        if id != artCacheID {
-            // currentTrack() runs on the poll queue (off-main), so a synchronous
-            // fetch here is fine. Only lock the cache once we actually have an
-            // image, so a not-yet-ready / failed url is retried next tick.
-            artCache = nil
-            if let urlStr = t.artworkUrl, let url = URL(string: urlStr),
-               let data = try? Data(contentsOf: url), let img = NSImage(data: data) {
-                artCacheID = id
-                artCache = img
-            }
+        guard isRunning, let t = app?.currentTrack else { return nil }
+        guard let id = t.id else { return nil }   // 1 Apple Event
+        if id == cachedID, let cached = cachedTrack { return cached }
+
+        guard let name = t.name else { return nil }
+        // Runs on the poll queue (off-main), so a synchronous cover fetch is fine.
+        var artwork: NSImage?
+        if let urlStr = t.artworkUrl, let url = URL(string: urlStr),
+           let data = try? Data(contentsOf: url), let img = NSImage(data: data) {
+            artwork = img
         }
-        return Track(
+        let track = Track(
             id: id,
             title: name,
             artist: t.artist ?? "",
             album: t.album ?? "",
-            duration: Double(durMs) / 1000.0,
-            artwork: artCache,
+            duration: Double(t.duration ?? 0) / 1000.0,
+            artwork: artwork,
             isLiked: nil
         )
+        // Lock the cache only once the cover is in, else retry next poll.
+        if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
+        return track
     }
 
     func currentState() -> PlaybackState? {

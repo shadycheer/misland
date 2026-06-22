@@ -20,15 +20,36 @@ final class PlaybackCoordinator {
         let canLike: Bool
     }
 
+    private struct Read {
+        let source: NowPlayingSource
+        let state: PlaybackState?
+        let track: Track?
+    }
+
     /// Reads the players via ScriptingBridge. Call OFF the main thread (it does
     /// synchronous cross-process IPC) — serialize calls on one queue.
+    /// Each source is read at most ONCE per snapshot.
     func readSnapshot() -> Snapshot {
-        let active = resolveActiveSource()
-        activeKind = active?.kind
-        if let active, let t = active.currentTrack(), let st = active.currentState() {
-            return Snapshot(track: t, state: st, canLike: active.canSetLiked)
+        let reads: [Read] = sources.map { src in
+            guard src.isRunning else { return Read(source: src, state: nil, track: nil) }
+            return Read(source: src, state: src.currentState(), track: src.currentTrack())
+        }
+        let active = selectActive(reads)
+        activeKind = active?.source.kind
+        if let active, let t = active.track, let st = active.state {
+            return Snapshot(track: t, state: st, canLike: active.source.canSetLiked)
         }
         return Snapshot(track: nil, state: nil, canLike: false)
+    }
+
+    /// Sticky active source if still playing; else first playing; else first with a track.
+    private func selectActive(_ reads: [Read]) -> Read? {
+        if let k = activeKind, let r = reads.first(where: { $0.source.kind == k }),
+           r.state?.isPlaying == true {
+            return r
+        }
+        if let playing = reads.first(where: { $0.state?.isPlaying == true }) { return playing }
+        return reads.first { $0.track != nil }
     }
 
     /// Apply a snapshot to the observable state. MAIN THREAD ONLY.
@@ -42,11 +63,9 @@ final class PlaybackCoordinator {
     func refresh() { publish(readSnapshot()) }
 
     /// Promote a source that just signalled a change (most-recently-active wins).
-    /// Call on the same queue as `readSnapshot`.
+    /// readSnapshot validates it's still playing before honoring the stickiness.
     func sourceDidSignal(_ kind: SourceKind) {
-        if let s = source(for: kind), s.isRunning, s.currentState()?.isPlaying == true {
-            activeKind = kind
-        }
+        activeKind = kind
     }
 
     func playPause() { activeSource?.playPause() }
@@ -69,18 +88,5 @@ final class PlaybackCoordinator {
 
     private func source(for kind: SourceKind) -> NowPlayingSource? {
         sources.first { $0.kind == kind }
-    }
-
-    /// Active source = the sticky activeKind if it is still playing; else the
-    /// first running+playing source; else the first running source with a track.
-    private func resolveActiveSource() -> NowPlayingSource? {
-        if let k = activeKind, let s = source(for: k),
-           s.isRunning, s.currentState()?.isPlaying == true {
-            return s
-        }
-        if let playing = sources.first(where: { $0.isRunning && $0.currentState()?.isPlaying == true }) {
-            return playing
-        }
-        return sources.first { $0.isRunning && $0.currentTrack() != nil }
     }
 }

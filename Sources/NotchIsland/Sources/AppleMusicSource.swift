@@ -6,43 +6,39 @@ final class AppleMusicSource: NowPlayingSource {
     let canSetLiked = true
 
     private let bundleID = "com.apple.Music"
-    private var app: MusicApplication? {
+    // Create the SBApplication ONCE (see SpotifySource for why).
+    private lazy var app: MusicApplication? =
         SBApplication(bundleIdentifier: bundleID) as? MusicApplication
-    }
 
-    var isRunning: Bool {
-        NSWorkspace.shared.runningApplications
-            .contains { $0.bundleIdentifier == bundleID }
-    }
+    var isRunning: Bool { app?.isRunning ?? false }
 
-    // Artwork is expensive to read/decode; cache it per track id so the 1s
-    // refresh tick doesn't re-fetch it every second.
-    private var artCacheID: String?
-    private var artCache: NSImage?
+    // Each SBObject property read is a separate synchronous Apple Event. Track
+    // metadata only changes on track change, so cache the whole Track keyed by
+    // id and re-read the full set only when the id changes. Unchanged polls cost
+    // a single Apple Event (the id check).
+    private var cachedID: String?
+    private var cachedTrack: Track?
 
     func currentTrack() -> Track? {
-        guard isRunning, let t = app?.currentTrack, let name = t.name else { return nil }
-        let id = t.id.map(String.init) ?? name
-        if id != artCacheID {
-            // Music.app often returns no artwork for the first moment after a
-            // track starts. Only lock the cache once we actually have an image;
-            // until then keep retrying (and don't show the previous cover).
-            if let art = t.artworks?.first?.data {
-                artCacheID = id
-                artCache = art
-            } else {
-                artCache = nil
-            }
-        }
-        return Track(
+        guard isRunning, let t = app?.currentTrack else { return nil }
+        guard let id = t.id.map(String.init) else { return nil }   // 1 Apple Event
+        if id == cachedID, let cached = cachedTrack { return cached }
+
+        guard let name = t.name else { return nil }
+        let artwork = t.artworks?.first?.data
+        let track = Track(
             id: id,
             title: name,
             artist: t.artist ?? "",
             album: t.album ?? "",
             duration: t.duration ?? 0,
-            artwork: artCache,
+            artwork: artwork,
             isLiked: t.loved ?? false
         )
+        // Lock the cache only once artwork is present (Music returns it late);
+        // otherwise leave it so the next poll re-reads until the cover arrives.
+        if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
+        return track
     }
 
     func currentState() -> PlaybackState? {
