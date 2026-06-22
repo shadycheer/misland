@@ -17,23 +17,32 @@ struct IslandRootView: View {
     }
     private var expandedTotalHeight: CGFloat { notchInset + IslandLayout.expandedHeight }
 
+    // Cubic-bezier (cubic-bezier-style) timing curves — tweak the 4 control
+    // numbers + duration to retune the feel. Expand pops out with a slight
+    // overshoot; collapse snaps back quicker with no bounce.
+    private let expandCurve = Animation.timingCurve(0.2, 1.25, 0.3, 1.0, duration: 0.42)
+    private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
+    private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
+
     var body: some View {
         ZStack(alignment: .top) {
-            collapsedView.opacity(expanded ? 0 : 1)
-            expandedView.opacity(expanded ? 1 : 0)
+            collapsedView
+                .opacity(expanded ? 0 : 1)
+                .animation(.easeOut(duration: 0.14), value: expanded)
+            expandedView
+                .opacity(expanded ? 1 : 0)
+                .animation(.easeOut(duration: 0.20), value: expanded)
         }
-        // One black shape whose size springs between the two states; content
-        // cross-fades on top, so it reads as the island growing, not swapping.
+        // One black shape; only its size animates (on the timing curve), so it
+        // reads as the island physically popping out / snapping back.
         .frame(width: expanded ? IslandLayout.expandedWidth : collapsedWidth,
                height: expanded ? expandedTotalHeight : collapsedHeight,
                alignment: .top)
+        .animation(sizeCurve, value: expanded)
         .background(.black)
-        .clipShape(.rect(bottomLeadingRadius: expanded ? 22 : 14,
-                         bottomTrailingRadius: expanded ? 22 : 14))
+        .clipShape(.rect(bottomLeadingRadius: 16, bottomTrailingRadius: 16))
         .onHover { hovering in
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                expanded = hovering
-            }
+            expanded = hovering
             onExpandChange(hovering)
         }
     }
