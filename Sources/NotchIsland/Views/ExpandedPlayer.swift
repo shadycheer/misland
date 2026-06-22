@@ -9,6 +9,9 @@ struct ExpandedPlayer: View {
     let onPrev: () -> Void
     let onSeek: (TimeInterval) -> Void
     let onToggleLike: () -> Void
+    let onExport: () -> Void
+
+    @AppStorage("showExportButton") private var showExportButton = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -25,14 +28,19 @@ struct ExpandedPlayer: View {
                     Spacer(minLength: 0)
                 }
                 Spacer(minLength: 4)
-                if canLike {
-                    let liked = track?.isLiked ?? false
-                    ControlButton(
-                        system: liked ? "heart.fill" : "heart",
-                        size: 15,
-                        tint: liked ? .pink : .white,
-                        action: onToggleLike
-                    )
+                HStack(spacing: 14) {
+                    if showExportButton, track != nil {
+                        ControlButton(system: "square.and.arrow.up", size: 14, action: onExport)
+                    }
+                    if canLike {
+                        let liked = track?.isLiked ?? false
+                        ControlButton(
+                            system: liked ? "heart.fill" : "heart",
+                            size: 15,
+                            tint: liked ? .pink : .white,
+                            action: onToggleLike
+                        )
+                    }
                 }
             }
             .frame(height: 64)

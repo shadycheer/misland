@@ -11,6 +11,7 @@ struct IslandRootView: View {
     @State private var peeking = false
     @State private var peekTask: DispatchWorkItem?
     @State private var hoverWork: DispatchWorkItem?
+    @AppStorage("autoPeek") private var autoPeek = true
 
     /// Expanded when the pointer is over it OR during an auto-peek.
     private var expanded: Bool { hovering || peeking }
@@ -78,6 +79,7 @@ struct IslandRootView: View {
     /// Auto-peek: expand briefly on a track change, then collapse after 2s
     /// (unless the pointer is on it).
     private func peek() {
+        guard autoPeek else { return }
         peekTask?.cancel()
         peeking = true
         syncWindow()
@@ -143,7 +145,8 @@ struct IslandRootView: View {
                 onNext: coordinator.next,
                 onPrev: coordinator.previous,
                 onSeek: coordinator.seek(to:),
-                onToggleLike: coordinator.toggleLike
+                onToggleLike: coordinator.toggleLike,
+                onExport: { CardExporter.export(track: coordinator.track, source: coordinator.state?.source) }
             )
         }
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
