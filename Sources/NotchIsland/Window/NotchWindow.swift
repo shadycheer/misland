@@ -16,17 +16,9 @@ struct IslandGeometry {
     let notchHeight: CGFloat
 }
 
-/// Content view that only swallows mouse events inside `activeRect` (the visible
-/// island). Everywhere else clicks fall through to the menu bar / desktop, so a
-/// fixed full-size window never blocks anything.
-final class PassthroughContainer: NSView {
-    var activeRect: CGRect = .zero
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let local = convert(point, from: superview)
-        guard activeRect.contains(local) else { return nil }
-        return super.hitTest(point)
-    }
-}
+/// Container view. Click-through is handled precisely by the app's global mouse
+/// monitor toggling `window.ignoresMouseEvents`, so this just hosts content.
+final class PassthroughContainer: NSView {}
 
 final class NotchWindow: NSPanel {
     init(rootView: NSView) {

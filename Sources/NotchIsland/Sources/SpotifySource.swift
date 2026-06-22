@@ -22,6 +22,7 @@ final class SpotifySource: NowPlayingSource {
     private var likeID: String?
     private var liked: Bool?
     private var fetchingLike: String?
+    private var pollCount = 0
 
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
@@ -29,10 +30,14 @@ final class SpotifySource: NowPlayingSource {
         guard let name = t.name else { return nil }
 
         lock.lock()
+        pollCount += 1
+        // Re-check like state periodically (~every 4s) so a like made directly
+        // in Spotify is reflected here too.
+        let likeStale = pollCount % 8 == 0
         let cachedArt = (artID == id) ? art : nil
         let cachedLiked = (likeID == id) ? liked : nil
         let needArt = artID != id && fetchingArt != id
-        let needLike = canSetLiked && likeID != id && fetchingLike != id
+        let needLike = canSetLiked && (likeID != id || likeStale) && fetchingLike != id
         if needArt { fetchingArt = id }
         if needLike { fetchingLike = id }
         lock.unlock()

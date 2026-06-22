@@ -11,8 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
     private let pollQueue = DispatchQueue(label: "com.shadycheer.notchisland.poll")
-    private var islandScreenRect: CGRect = .zero   // current interactive area, screen coords
+    private let islandState = IslandState()
+    private var collapsedScreenRect: CGRect = .zero  // exact screen rect of the pill
+    private var expandedScreenRect: CGRect = .zero   // exact screen rect when expanded
     private var mouseMonitors: [Any] = []
+    private var dwellWork: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherInstances()
@@ -33,8 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              notchWidth: notch.width, notchHeight: notch.height)
 
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator, geo: geo,
-                           onExpandChange: { [weak self] in self?.setExpanded($0) })
+            IslandRootView(coordinator: coordinator, geo: geo, islandState: islandState)
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
@@ -54,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         window = NotchWindow(rootView: container)
         if let screen { window.place(on: screen, size: expandedSize) }
-        setExpanded(false)
+        computeRects()
         window.orderFrontRegardless()
 
         setupStatusItem()
@@ -70,21 +72,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (mouseMoved monitors need no special permission.)
     private func setupMouseMonitors() {
         let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
-            self?.updateClickThrough()
+            self?.onMouseMoved()
         }
         let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-            self?.updateClickThrough()
+            self?.onMouseMoved()
             return event
         }
         mouseMonitors = [global, local].compactMap { $0 }
-        updateClickThrough()
+        onMouseMoved()
     }
 
-    private func updateClickThrough() {
-        let shouldIgnore = !islandScreenRect.contains(NSEvent.mouseLocation)
-        if window.ignoresMouseEvents != shouldIgnore {
-            window.ignoresMouseEvents = shouldIgnore
+    /// Single source of truth for hover: is the cursor inside the island's exact
+    /// screen rect? Drives both click-through and (with a dwell) the expand state.
+    private func onMouseMoved() {
+        let loc = NSEvent.mouseLocation
+        let activeRect = islandState.expanded ? expandedScreenRect : collapsedScreenRect
+        let inside = activeRect.contains(loc)
+
+        if window.ignoresMouseEvents != !inside { window.ignoresMouseEvents = !inside }
+
+        if inside {
+            if !islandState.hovering, dwellWork == nil {
+                let work = DispatchWorkItem { [weak self] in
+                    self?.islandState.hovering = true
+                    self?.dwellWork = nil
+                }
+                dwellWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+            }
+        } else {
+            dwellWork?.cancel(); dwellWork = nil
+            if islandState.hovering { islandState.hovering = false }
         }
+    }
+
+    /// Exact screen rects of the collapsed pill and the expanded panel, both
+    /// top-centered within the fixed window.
+    private func computeRects() {
+        let f = window.frame
+        let c = collapsedSize
+        collapsedScreenRect = CGRect(
+            x: f.minX + (f.width - c.width) / 2,
+            y: f.maxY - c.height,
+            width: c.width, height: c.height
+        )
+        expandedScreenRect = f
     }
 
     /// Read the players off the main thread (ScriptingBridge is synchronous IPC),
@@ -108,28 +140,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         geo.hasNotch
             ? CGSize(width: geo.notchWidth + 2 * IslandLayout.sideWidth, height: geo.notchHeight)
             : CGSize(width: IslandLayout.collapsedWidth, height: IslandLayout.collapsedHeight)
-    }
-
-    /// Update which region of the fixed window is mouse-interactive (top-center,
-    /// sized to the current island). No window resize → animation stays smooth.
-    private func setExpanded(_ expanded: Bool) {
-        let full = expandedSize
-        let s = expanded ? full : collapsedSize
-        let rect = CGRect(
-            x: (full.width - s.width) / 2,
-            y: full.height - s.height,
-            width: s.width,
-            height: s.height
-        )
-        container.activeRect = rect
-        // Same rect in screen coordinates, for the click-through monitor.
-        islandScreenRect = CGRect(
-            x: window.frame.minX + rect.minX,
-            y: window.frame.minY + rect.minY,
-            width: rect.width,
-            height: rect.height
-        )
-        updateClickThrough()
     }
 
     private func setupStatusItem() {

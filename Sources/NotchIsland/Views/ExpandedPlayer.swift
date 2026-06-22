@@ -12,6 +12,7 @@ struct ExpandedPlayer: View {
     let onExport: () -> Void
 
     @AppStorage("showExportButton") private var showExportButton = true
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -30,7 +31,12 @@ struct ExpandedPlayer: View {
                 Spacer(minLength: 4)
                 HStack(spacing: 14) {
                     if showExportButton, track != nil {
-                        ControlButton(system: "square.and.arrow.up", size: 14, action: onExport)
+                        ControlButton(system: copied ? "checkmark" : "square.and.arrow.up",
+                                      size: 14, tint: copied ? .green : .white) {
+                            onExport()
+                            copied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                        }
                     }
                     if canLike {
                         let liked = track?.isLiked ?? false
@@ -101,6 +107,7 @@ struct ExpandedPlayer: View {
             ControlButton(system: "forward.fill", size: 15, action: onNext)
         }
         .frame(maxWidth: .infinity)
+        .offset(y: -8)   // nudge the transport up a touch; progress stays put
     }
 
     private func fmt(_ s: TimeInterval) -> String {

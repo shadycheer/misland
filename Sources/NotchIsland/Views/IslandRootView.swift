@@ -4,18 +4,14 @@ import AppKit
 struct IslandRootView: View {
     @State var coordinator: PlaybackCoordinator
     let geo: IslandGeometry
-    /// Called when the visible (expanded) state flips so the window can update
-    /// its mouse-interactive region.
-    let onExpandChange: (Bool) -> Void
+    /// Expand state — `hovering` is driven by the AppDelegate's mouse monitor
+    /// against the island's exact screen rect; `peeking` by track changes.
+    @State var islandState: IslandState
 
-    @State private var hovering = false
-    @State private var peeking = false
     @State private var peekTask: DispatchWorkItem?
-    @State private var hoverWork: DispatchWorkItem?
     @AppStorage("autoPeek") private var autoPeek = true
 
-    /// Expanded when the pointer is over it OR during an auto-peek.
-    private var expanded: Bool { hovering || peeking }
+    private var expanded: Bool { islandState.expanded }
 
     private var notchInset: CGFloat { geo.hasNotch ? geo.notchHeight : 0 }
     private var collapsedWidth: CGFloat {
@@ -51,43 +47,19 @@ struct IslandRootView: View {
                    alignment: .top)
             .clipShape(shape)
             .animation(sizeCurve, value: expanded)
-            // onHover MUST sit on the island-sized view (not the full host
-            // frame) — SwiftUI's hover tracking area ignores our hitTest gate,
-            // so on the outer frame it would fire across the whole 380x200 window.
-            .onHover { h in onHover(h) }
             .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .onChange(of: coordinator.track?.id) { _, newID in
                 if newID != nil { peek() }
             }
     }
 
-    /// Small hover-intent delay so merely passing the cursor over the island
-    /// doesn't expand it; collapse immediately on exit.
-    private func onHover(_ h: Bool) {
-        hoverWork?.cancel()
-        if h {
-            let work = DispatchWorkItem { hovering = true; syncWindow() }
-            hoverWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
-        } else {
-            hovering = false
-            syncWindow()
-        }
-    }
-
-    private func syncWindow() { onExpandChange(expanded) }
-
     /// Auto-peek: expand briefly on a track change, then collapse after 2s
     /// (unless the pointer is on it).
     private func peek() {
         guard autoPeek else { return }
         peekTask?.cancel()
-        peeking = true
-        syncWindow()
-        let task = DispatchWorkItem {
-            peeking = false
-            syncWindow()
-        }
+        islandState.peeking = true
+        let task = DispatchWorkItem { islandState.peeking = false }
         peekTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: task)
     }
