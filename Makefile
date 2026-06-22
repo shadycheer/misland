@@ -15,7 +15,8 @@ bundle: build
 	  $(BUNDLE)/Contents/MacOS/$(APP)
 
 run: bundle
-	open $(BUNDLE)
+	-killall $(APP) 2>/dev/null; sleep 0.3
+	open -n $(BUNDLE)
 
 test:
 	swift test
