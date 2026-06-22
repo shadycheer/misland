@@ -29,7 +29,7 @@ struct IslandRootView: View {
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
     var body: some View {
-        let shape = NotchShape(topRadius: 10, bottomRadius: 18)
+        let shape = NotchShape(topRadius: 10, bottomRadius: 22)
         shape
             .fill(.black)
             .overlay(alignment: .top) {
@@ -79,22 +79,28 @@ struct IslandRootView: View {
     private var collapsedView: some View {
         Group {
             if geo.hasNotch {
-                // Flank the camera: art left, bars right, notch in the gap.
+                // Art hugs the camera's left, bars hug its right; the outer
+                // shoulders are empty black framing them (not edge-jammed).
                 HStack(spacing: 0) {
                     artworkThumb
-                    Spacer(minLength: 0)
+                        .padding(.trailing, 6)
+                        .frame(width: IslandLayout.sideWidth, alignment: .trailing)
+                    Color.clear.frame(width: geo.notchWidth)
                     AudioBars(playing: coordinator.state?.isPlaying ?? false)
+                        .padding(.leading, 8)
+                        .frame(width: IslandLayout.sideWidth, alignment: .leading)
                 }
+                .frame(width: collapsedWidth, height: collapsedHeight)
             } else {
                 // No notch: compact pill, art + bars together (no empty gap).
                 HStack(spacing: 9) {
                     artworkThumb
                     AudioBars(playing: coordinator.state?.isPlaying ?? false)
                 }
+                .padding(.horizontal, 10)
+                .frame(width: collapsedWidth, height: collapsedHeight)
             }
         }
-        .padding(.horizontal, 10)
-        .frame(width: collapsedWidth, height: collapsedHeight)
     }
 
     private var artworkThumb: some View {
