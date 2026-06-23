@@ -16,27 +16,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var expandedScreenRect: CGRect = .zero   // exact screen rect when expanded
     private var mouseMonitors: [Any] = []
     private var dwellWork: DispatchWorkItem?
+    private var currentScreenFrame: CGRect = .null
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherInstances()
         coordinator = PlaybackCoordinator(sources: sources)
 
-        // Prefer the built-in notched screen (NSScreen.main follows keyboard
-        // focus, which may be an external display).
-        let screen = NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main
-        let notch = screen.map {
-            NotchGeometry.notchSize(
-                forScreenWidth: $0.frame.width,
-                safeAreaTop: $0.safeAreaInsets.top,
-                leftArea: $0.auxiliaryTopLeftArea,
-                rightArea: $0.auxiliaryTopRightArea
-            )
-        } ?? .zero
-        geo = IslandGeometry(hasNotch: notch.height > 0,
-                             notchWidth: notch.width, notchHeight: notch.height)
+        let initial = screenUnderCursor() ?? NSScreen.main ?? NSScreen.screens.first
+        geo = initial.map(geometry(for:)) ?? geo
+        islandState.geo = geo
 
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator, geo: geo, islandState: islandState)
+            IslandRootView(coordinator: coordinator, islandState: islandState)
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
@@ -55,8 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         container.menu = makeAppMenu()
 
         window = NotchWindow(rootView: container)
-        if let screen { window.place(on: screen, size: expandedSize) }
-        computeRects()
+        if let initial { place(on: initial) }
         window.orderFrontRegardless()
 
         setupStatusItem()
@@ -86,6 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// screen rect? Drives both click-through and (with a dwell) the expand state.
     private func onMouseMoved() {
         let loc = NSEvent.mouseLocation
+        // Follow the cursor across displays: re-place the island on whichever
+        // screen the pointer is on (notch screen → fused; else → floating top).
+        if let s = NSScreen.screens.first(where: { NSMouseInRect(loc, $0.frame, false) }),
+           s.frame != currentScreenFrame {
+            place(on: s)
+        }
         // The collapsed pill exists whenever there's a track (playing or paused);
         // the expanded panel only while already hovering. Idle = nothing to hit.
         let hasTrack = coordinator.track != nil
@@ -108,6 +104,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dwellWork?.cancel(); dwellWork = nil
             if islandState.hovering { islandState.hovering = false }
         }
+    }
+
+    private func screenUnderCursor() -> NSScreen? {
+        let loc = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(loc, $0.frame, false) }
+    }
+
+    private func geometry(for screen: NSScreen) -> IslandGeometry {
+        let notch = NotchGeometry.notchSize(
+            forScreenWidth: screen.frame.width,
+            safeAreaTop: screen.safeAreaInsets.top,
+            leftArea: screen.auxiliaryTopLeftArea,
+            rightArea: screen.auxiliaryTopRightArea
+        )
+        return IslandGeometry(hasNotch: notch.height > 0,
+                              notchWidth: notch.width, notchHeight: notch.height)
+    }
+
+    /// Move the island to `screen`: recompute geometry (notch vs floating),
+    /// reposition the window top-center, and refresh hit rects.
+    private func place(on screen: NSScreen) {
+        currentScreenFrame = screen.frame
+        geo = geometry(for: screen)
+        islandState.geo = geo
+        window.place(on: screen, size: expandedSize)
+        computeRects()
     }
 
     /// Exact screen rects of the collapsed pill and the expanded panel, both

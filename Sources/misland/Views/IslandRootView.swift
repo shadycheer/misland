@@ -3,14 +3,15 @@ import AppKit
 
 struct IslandRootView: View {
     @State var coordinator: PlaybackCoordinator
-    let geo: IslandGeometry
-    /// Expand state — `hovering` is driven by the AppDelegate's mouse monitor
-    /// against the island's exact screen rect; `peeking` by track changes.
+    /// Expand state + current-screen geometry. `hovering` is driven by the
+    /// AppDelegate mouse monitor; `peeking` by track changes; `geo` follows the
+    /// display the island is currently on.
     @State var islandState: IslandState
 
     @State private var peekTask: DispatchWorkItem?
     @AppStorage("autoPeek") private var autoPeek = true
 
+    private var geo: IslandGeometry { islandState.geo }
     private var expanded: Bool { islandState.expanded }
 
     private var notchInset: CGFloat { geo.hasNotch ? geo.notchHeight : 0 }
