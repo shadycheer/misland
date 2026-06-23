@@ -27,6 +27,11 @@ struct IslandRootView: View {
     private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
+    /// Only show the island while music is actually playing — or while the user
+    /// is interacting (hover) / a track just changed (peek). Idle = invisible,
+    /// so launching at login with nothing playing shows nothing.
+    private var visible: Bool { (coordinator.state?.isPlaying ?? false) || expanded }
+
     var body: some View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)
         shape
@@ -48,6 +53,8 @@ struct IslandRootView: View {
             .clipShape(shape)
             .animation(sizeCurve, value: expanded)
             .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+            .opacity(visible ? 1 : 0)
+            .animation(.easeInOut(duration: 0.25), value: visible)
             .onChange(of: coordinator.track?.id) { _, newID in
                 if newID != nil { peek() }
             }
