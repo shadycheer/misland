@@ -21,6 +21,15 @@ run: bundle
 test:
 	swift test
 
+dmg: bundle
+	rm -f .build/$(APP).dmg
+	rm -rf .build/dmg && mkdir -p .build/dmg
+	cp -R $(BUNDLE) .build/dmg/
+	ln -s /Applications .build/dmg/Applications
+	hdiutil create -volname "MisLand" -srcfolder .build/dmg -ov -format UDZO .build/$(APP).dmg
+	rm -rf .build/dmg
+	@echo "→ .build/$(APP).dmg"
+
 watch:
 	@bash scripts/watch.sh
 
