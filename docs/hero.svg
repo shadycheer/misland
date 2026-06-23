@@ -1,0 +1,64 @@
+<svg width="1600" height="620" viewBox="0 0 1600 620" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a1430"/>
+      <stop offset="0.5" stop-color="#2a1d4a"/>
+      <stop offset="1" stop-color="#3a1f3e"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A5B"/><stop offset="1" stop-color="#A14BFF"/>
+    </linearGradient>
+    <linearGradient id="cover2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3FE0B0"/><stop offset="1" stop-color="#1E7FE0"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c0c10"/><stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="620" rx="0" fill="url(#bg)"/>
+
+  <!-- title block -->
+  <text x="110" y="150" fill="#FFFFFF" font-family="-apple-system, Helvetica, sans-serif" font-size="76" font-weight="800">MisLand</text>
+  <text x="112" y="206" fill="#C9BEF0" font-family="-apple-system, Helvetica, sans-serif" font-size="27" font-weight="500">把正在播放的单曲,变成 Mac 刘海上的灵动岛</text>
+  <text x="112" y="248" fill="#8E84C0" font-family="-apple-system, Helvetica, sans-serif" font-size="20" font-weight="400">Spotify &amp; Apple Music · 显示 · 控制 · 点赞 · 纯本地</text>
+
+  <!-- ===== collapsed pill (hugging a notch) ===== -->
+  <g transform="translate(110, 360)">
+    <text x="2" y="-22" fill="#8E84C0" font-family="-apple-system, sans-serif" font-size="18" font-weight="600">收起 · 贴刘海</text>
+    <!-- notch bar -->
+    <rect x="0" y="0" width="430" height="56" rx="0" fill="#000"/>
+    <path d="M120 0 q8 0 8 8 v28 q0 12 12 12 h150 q12 0 12 -12 v-28 q0 -8 8 -8 Z" fill="#000"/>
+    <!-- cover + bars hugging the center -->
+    <rect x="150" y="14" width="28" height="28" rx="7" fill="url(#cover)"/>
+    <g fill="#fff">
+      <rect x="266" y="22" width="5" height="12" rx="2.5"/>
+      <rect x="276" y="14" width="5" height="28" rx="2.5"/>
+      <rect x="286" y="19" width="5" height="18" rx="2.5"/>
+      <rect x="296" y="12" width="5" height="32" rx="2.5"/>
+    </g>
+  </g>
+
+  <!-- ===== expanded player ===== -->
+  <g transform="translate(770, 300)">
+    <text x="2" y="-22" fill="#8E84C0" font-family="-apple-system, sans-serif" font-size="18" font-weight="600">悬停展开 · 完整控制</text>
+    <rect x="0" y="0" width="430" height="250" rx="26" fill="url(#panel)"/>
+    <rect x="26" y="26" width="92" height="92" rx="14" fill="url(#cover2)"/>
+    <text x="140" y="58" fill="#fff" font-family="-apple-system, sans-serif" font-size="24" font-weight="700">群青</text>
+    <text x="140" y="88" fill="#B9B9C2" font-family="-apple-system, sans-serif" font-size="17">YOASOBI</text>
+    <text x="140" y="112" fill="#7E7E88" font-family="-apple-system, sans-serif" font-size="14">THE BOOK</text>
+    <!-- heart -->
+    <path d="M392 44 a11 11 0 0 1 16 0 a11 11 0 0 1 16 0 q6 8 -16 22 q-22 -14 -16 -22 Z" fill="#FF4D7E"/>
+    <!-- progress -->
+    <rect x="26" y="150" width="378" height="5" rx="2.5" fill="#2a2a30"/>
+    <rect x="26" y="150" width="150" height="5" rx="2.5" fill="#fff"/>
+    <text x="26" y="180" fill="#8a8a92" font-family="-apple-system, sans-serif" font-size="13">1:21</text>
+    <text x="374" y="180" fill="#8a8a92" font-family="-apple-system, sans-serif" font-size="13">3:24</text>
+    <!-- transport -->
+    <g fill="#fff" transform="translate(215, 212)">
+      <path d="M-66 -10 l-16 10 l16 10 Z M-86 -11 v22 h4 v-22 Z"/>
+      <path d="M-12 -14 h7 v28 h-7 Z M5 -14 h7 v28 h-7 Z"/>
+      <path d="M66 -10 l16 10 l-16 10 Z M82 -11 v22 h4 v-22 Z"/>
+    </g>
+  </g>
+</svg>
