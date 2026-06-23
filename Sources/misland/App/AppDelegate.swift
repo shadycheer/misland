@@ -3,7 +3,6 @@ import SwiftUI
 import Combine
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem!
     private var window: NotchWindow!
     private var container: PassthroughContainer!
     private var coordinator: PlaybackCoordinator!
@@ -52,7 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let initial { place(on: initial) }
         window.orderFrontRegardless()
 
-        setupStatusItem()
         setupMouseMonitors()
         observeDistributedNotifications()
         startPolling()
@@ -176,14 +174,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : CGSize(width: IslandLayout.collapsedWidth, height: geo.barHeight)
     }
 
-    private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "MisLand")
-        statusItem.menu = makeAppMenu()
-    }
-
-    /// Build a fresh menu (Preferences / Quit) with targets bound to this app
-    /// delegate. Used by both the status item and the island's right-click menu.
+    /// Build a fresh menu (Preferences / Quit) bound to this app delegate —
+    /// used by the island's right-click menu (no menu-bar icon).
     private func makeAppMenu() -> NSMenu {
         let menu = NSMenu()
         let prefs = NSMenuItem(title: "偏好设置…", action: #selector(showPreferences), keyEquivalent: ",")

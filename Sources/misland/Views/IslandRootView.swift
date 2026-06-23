@@ -140,7 +140,8 @@ struct IslandRootView: View {
                 },
                 onOpen: { link in
                     if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                }
+                },
+                onSettings: { PreferencesWindowController.shared.show() }
             )
         }
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
