@@ -14,6 +14,11 @@ final class PlaylistBrowserModel {
     var loading = false
     var source: SourceKind = .spotify
 
+    /// Per-row enrichment, keyed by row id. Liked drives the heart; cover is a
+    /// URL loaded lazily per visible row via ArtworkCache.
+    var likedByID: [String: Bool] = [:]
+    var coverByID: [String: String] = [:]
+
     // Playback modes are passthrough — toggling sets the player's mode directly.
     var shuffle = false
     var repeatMode: RepeatMode = .off
@@ -38,9 +43,11 @@ final class PlaylistBrowserModel {
         let src = source
         queue.async {
             let list = PlaylistService.playlists(src)
+            let covers = PlaylistService.coverURLs(forPlaylists: list)
             DispatchQueue.main.async {
                 guard self.source == src else { return }
                 self.playlists = list
+                self.coverByID.merge(covers) { _, new in new }
                 self.loading = false
             }
         }
@@ -52,15 +59,28 @@ final class PlaylistBrowserModel {
         loading = true
         queue.async {
             let list = PlaylistService.tracks(in: playlist)
+            let liked = PlaylistService.likedStatus(for: list)
+            let covers = PlaylistService.coverURLs(for: list)
             DispatchQueue.main.async {
                 guard self.currentPlaylist == playlist else { return }
                 self.tracks = list
+                self.likedByID.merge(liked) { _, new in new }
+                self.coverByID.merge(covers) { _, new in new }
                 self.loading = false
             }
         }
     }
 
     func back() { level = .playlists; tracks = [] }
+
+    func isLiked(_ track: PlaylistTrackRef) -> Bool { likedByID[track.id] ?? false }
+
+    func toggleLike(_ track: PlaylistTrackRef) {
+        let next = !(likedByID[track.id] ?? false)
+        likedByID[track.id] = next                       // optimistic
+        let pl = currentPlaylist
+        queue.async { PlaylistService.setLiked(next, for: track, in: pl) }
+    }
 
     func play(_ playlist: PlaylistRef) {
         queue.async { PlaylistService.play(playlist: playlist) }
@@ -128,7 +148,8 @@ struct PlaylistBrowserView: View {
             IconButton(system: repeatIcon, size: 12, tint: model.repeatMode == .off ? .white : .green) {
                 model.cycleRepeat()
             }
-            IconButton(system: "xmark", size: 12) { onClose() }
+            // Up-chevron collapses the browser back to the main player panel.
+            IconButton(system: "chevron.up", size: 14) { onClose() }
         }
         .padding(.horizontal, 16)
         .frame(height: 40)
@@ -163,6 +184,7 @@ struct PlaylistBrowserView: View {
                         } else {
                             ForEach(model.playlists) { pl in
                                 PlaylistRow(name: pl.name,
+                                            coverURL: model.coverByID[pl.id],
                                             onTap: { model.enter(pl) },
                                             onPlay: { model.play(pl) })
                             }
@@ -172,9 +194,11 @@ struct PlaylistBrowserView: View {
                             emptyRow("空歌单")
                         } else {
                             ForEach(model.tracks) { t in
-                                TrackRow(name: t.name, artist: t.artist) {
-                                    model.play(t, in: pl)
-                                }
+                                TrackRow(name: t.name, artist: t.artist,
+                                         coverURL: model.coverByID[t.id],
+                                         liked: model.isLiked(t),
+                                         onPlay: { model.play(t, in: pl) },
+                                         onToggleLike: { model.toggleLike(t) })
                             }
                         }
                     }
@@ -197,12 +221,14 @@ struct PlaylistBrowserView: View {
 
 private struct PlaylistRow: View {
     let name: String
+    let coverURL: String?
     let onTap: () -> Void
     let onPlay: () -> Void
     @State private var hover = false
 
     var body: some View {
         HStack(spacing: 10) {
+            CoverThumb(url: coverURL)
             Text(name)
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.9))
@@ -216,8 +242,8 @@ private struct PlaylistRow: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.3))
         }
-        .padding(.horizontal, 16)
-        .frame(height: 34)
+        .padding(.horizontal, 14)
+        .frame(height: 44)
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
@@ -228,11 +254,15 @@ private struct PlaylistRow: View {
 private struct TrackRow: View {
     let name: String
     let artist: String
+    let coverURL: String?
+    let liked: Bool
     let onPlay: () -> Void
+    let onToggleLike: () -> Void
     @State private var hover = false
 
     var body: some View {
         HStack(spacing: 10) {
+            CoverThumb(url: coverURL)
             VStack(alignment: .leading, spacing: 1) {
                 Text(name)
                     .font(.system(size: 12.5))
@@ -246,16 +276,50 @@ private struct TrackRow: View {
                 }
             }
             Spacer(minLength: 6)
-            Image(systemName: hover ? "play.fill" : "play")
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(hover ? 0.95 : 0.3))
+            // Heart shows + toggles liked state (no play button — double-click
+            // the row to play).
+            IconButton(system: liked ? "heart.fill" : "heart", size: 13,
+                       tint: liked ? .pink : .white, action: onToggleLike)
         }
-        .padding(.horizontal, 16)
-        .frame(height: artist.isEmpty ? 34 : 40)
+        .padding(.horizontal, 14)
+        .frame(height: 44)
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
-        .onTapGesture(perform: onPlay)
+        .onTapGesture(count: 2, perform: onPlay)
         .onHover { hover = $0 }
+    }
+}
+
+/// Lazily-loaded square cover for a row. Only fetches when the row appears
+/// (scroll-window), and re-uses ArtworkCache so scrolling back is instant.
+private struct CoverThumb: View {
+    let url: String?
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
+            } else {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(.white.opacity(0.08))
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.28))
+                    )
+            }
+        }
+        .frame(width: 32, height: 32)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .onAppear(perform: load)
+        .onChange(of: url) { _, _ in image = nil; load() }
+    }
+
+    private func load() {
+        guard image == nil, let url else { return }
+        if let cached = ArtworkCache.shared.cached(url) { image = cached; return }
+        ArtworkCache.shared.image(for: url) { img in if let img { image = img } }
     }
 }
 

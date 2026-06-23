@@ -44,6 +44,30 @@ enum SpotifyCLI {
         run(["library", liked ? "add" : "remove", uri])
     }
 
+    /// Liked-status for many URIs in ONE call → uri:isLiked map.
+    static func contains(_ uris: [String]) -> [String: Bool] {
+        guard !uris.isEmpty,
+              let data = run(["library", "contains"] + uris + ["--format", "json"]),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let map = obj["contains"] as? [String: Bool] else { return [:] }
+        return map
+    }
+
+    /// Cover image URLs for many URIs (tracks or playlists) in ONE call →
+    /// uri:image_url map. Only the URL is fetched here; the image itself is
+    /// loaded lazily per visible row via ArtworkCache.
+    static func imageURLs(_ uris: [String]) -> [String: String] {
+        guard !uris.isEmpty,
+              let data = run(["lookup"] + uris + ["--format", "json"]),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entities = obj["entities"] as? [[String: Any]] else { return [:] }
+        var result: [String: String] = [:]
+        for e in entities {
+            if let uri = e["uri"] as? String, let img = e["image_url"] as? String { result[uri] = img }
+        }
+        return result
+    }
+
     /// Resolve a track URI to its artist + album URIs (for click-to-open).
     static func links(forTrack uri: String) -> (artist: String?, album: String?) {
         guard let data = run(["lookup", uri, "--format", "json"]),

@@ -5,6 +5,7 @@ enum IslandLayout {
     static let expandedWidth: CGFloat = 380
     static let expandedHeight: CGFloat = 168
     static let browserHeight: CGFloat = 392    // taller panel while the playlist browser is open
+    static let noNotchStripHeight: CGFloat = 28 // top control strip height on notch-less screens
     static let sideWidth: CGFloat = 42        // art / bars zone on each side of the notch
     static let collapsedWidth: CGFloat = 220  // no-notch pill (art + title + bars)
     static let collapsedHeight: CGFloat = 32

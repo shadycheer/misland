@@ -78,12 +78,13 @@ final class SpotifySource: NowPlayingSource {
     }
 
     private func fetchArtwork(id: String, urlString: String?) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            var image: NSImage?
-            if let urlString, let url = URL(string: urlString),
-               let data = try? Data(contentsOf: url) {
-                image = NSImage(data: data)
-            }
+        guard let urlString else {
+            lock.lock(); art = nil; artID = id; fetchingArt = nil; lock.unlock()
+            return
+        }
+        // Shared cache: cached covers (incl. across launches via disk) resolve
+        // immediately; only a never-seen cover costs a network request.
+        ArtworkCache.shared.image(for: urlString) { [weak self] image in
             guard let self else { return }
             self.lock.lock()
             self.art = image; self.artID = id; self.fetchingArt = nil

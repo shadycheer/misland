@@ -18,7 +18,11 @@ struct IslandRootView: View {
     private var geo: IslandGeometry { islandState.geo }
     private var expanded: Bool { islandState.expanded }
 
-    private var notchInset: CGFloat { geo.hasNotch ? geo.notchHeight : 0 }
+    /// Top strip aligned with the notch (its left/right shoulders hold the
+    /// browse + settings icons). On notch-less screens it's a thin top bar.
+    private var stripHeight: CGFloat {
+        geo.hasNotch ? geo.notchHeight : IslandLayout.noNotchStripHeight
+    }
     private var collapsedWidth: CGFloat {
         geo.hasNotch ? geo.notchWidth + 2 * IslandLayout.sideWidth : IslandLayout.collapsedWidth
     }
@@ -28,7 +32,7 @@ struct IslandRootView: View {
     private var expandedContentHeight: CGFloat {
         islandState.browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
     }
-    private var expandedTotalHeight: CGFloat { notchInset + expandedContentHeight }
+    private var expandedTotalHeight: CGFloat { stripHeight + expandedContentHeight }
 
     // Cubic-bezier timing — expand pops with a slight overshoot, collapse snaps back.
     private let expandCurve = Animation.timingCurve(0.2, 1.25, 0.3, 1.0, duration: 0.42)
@@ -42,31 +46,30 @@ struct IslandRootView: View {
 
     var body: some View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)
-        shape
-            .fill(.black)
-            .overlay(alignment: .top) {
-                ZStack(alignment: .top) {
-                    collapsedView
-                        .opacity(expanded ? 0 : 1)
-                        .animation(.easeOut(duration: 0.12), value: expanded)
-                    expandedView
-                        .opacity(expanded ? 1 : 0)
-                        .scaleEffect(expanded ? 1 : 0.92, anchor: .top)
-                        .animation(.easeOut(duration: 0.18), value: expanded)
-                }
-            }
-            .frame(width: expanded ? IslandLayout.expandedWidth : collapsedWidth,
-                   height: expanded ? expandedTotalHeight : collapsedHeight,
-                   alignment: .top)
-            .clipShape(shape)
-            .animation(sizeCurve, value: expanded)
-            .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
-            .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
-            .opacity(visible ? 1 : 0)
-            .animation(.easeInOut(duration: 0.25), value: visible)
-            .onChange(of: coordinator.track?.id) { _, newID in
-                if newID != nil { peek() }
-            }
+        let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
+        let h = expanded ? expandedTotalHeight : collapsedHeight
+        // Everything is TOP-anchored and clipped to the animating frame, so the
+        // panel grows straight down from the notch (no center-out / split feel).
+        // Content is masked by the growing height → revealed top-first.
+        return ZStack(alignment: .top) {
+            shape.fill(.black)
+            collapsedView
+                .opacity(expanded ? 0 : 1)
+                .animation(.easeOut(duration: 0.10), value: expanded)
+            expandedView
+                .opacity(expanded ? 1 : 0)
+                .animation(.easeIn(duration: 0.18).delay(expanded ? 0.06 : 0), value: expanded)
+        }
+        .frame(width: w, height: h, alignment: .top)
+        .clipShape(shape)
+        .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+        .animation(sizeCurve, value: expanded)
+        .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
+        .opacity(visible ? 1 : 0)
+        .animation(.easeInOut(duration: 0.25), value: visible)
+        .onChange(of: coordinator.track?.id) { _, newID in
+            if newID != nil { peek() }
+        }
     }
 
     /// Auto-peek: expand briefly on a track change, then collapse after 2s
@@ -131,7 +134,7 @@ struct IslandRootView: View {
 
     private var expandedView: some View {
         VStack(spacing: 0) {
-            if notchInset > 0 { Color.clear.frame(height: notchInset) }
+            Color.clear.frame(height: stripHeight)   // notch-height strip (icons overlaid)
             if islandState.browserOpen {
                 PlaylistBrowserView(model: browser, onClose: closeBrowser)
             } else {
@@ -151,13 +154,28 @@ struct IslandRootView: View {
                     },
                     onOpen: { link in
                         if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                    },
-                    onSettings: { PreferencesWindowController.shared.show() },
-                    onBrowse: openBrowser
+                    }
                 )
             }
         }
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+        // Browse (left shoulder) + settings (right shoulder), flanking the notch
+        // at its own height. Hidden while browsing (the browser has its own bar).
+        .overlay(alignment: .top) {
+            if !islandState.browserOpen { notchControls }
+        }
+    }
+
+    /// The two icons sitting in the notch strip, pushed to the left/right
+    /// shoulders so they straddle the camera cutout.
+    private var notchControls: some View {
+        HStack(spacing: 0) {
+            StripButton(system: "music.note.list", action: openBrowser)
+            Spacer(minLength: 0)
+            StripButton(system: "gearshape") { PreferencesWindowController.shared.show() }
+        }
+        .padding(.horizontal, 16)
+        .frame(width: IslandLayout.expandedWidth, height: stripHeight)
     }
 
     /// Browse the player you're currently using (fall back to whichever is set
@@ -172,5 +190,24 @@ struct IslandRootView: View {
     private func closeBrowser() {
         islandState.browserOpen = false
         onBrowserResize(false)
+    }
+}
+
+/// Small icon button for the notch strip — subtle by default, brightens on hover.
+private struct StripButton: View {
+    let system: String
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(hover ? 1 : 0.55))
+        }
+        .buttonStyle(.plain)
+        .onHover { h in
+            withAnimation(.easeOut(duration: 0.12)) { hover = h }
+        }
     }
 }

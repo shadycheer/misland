@@ -12,8 +12,6 @@ struct ExpandedPlayer: View {
     let onToggleLike: () -> Void
     let onExport: () -> Void
     let onOpen: (String?) -> Void
-    let onSettings: () -> Void
-    let onBrowse: () -> Void
 
     @AppStorage("showExportButton") private var showExportButton = true
     @State private var copied = false
@@ -36,8 +34,6 @@ struct ExpandedPlayer: View {
                 }
                 Spacer(minLength: 4)
                 HStack(spacing: 14) {
-                    ControlButton(system: "music.note.list", size: 14, action: onBrowse)
-                    ControlButton(system: "gearshape", size: 14, action: onSettings)
                     if showExportButton, track != nil {
                         ControlButton(system: copied ? "checkmark" : "square.and.arrow.up",
                                       size: 14, tint: copied ? .green : .white) {

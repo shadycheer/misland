@@ -178,8 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var expandedSize: CGSize {
         let content = browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
-        let notch = geo.hasNotch ? geo.notchHeight : 0
-        return CGSize(width: IslandLayout.expandedWidth, height: notch + content)
+        let strip = geo.hasNotch ? geo.notchHeight : IslandLayout.noNotchStripHeight
+        return CGSize(width: IslandLayout.expandedWidth, height: strip + content)
     }
 
     private var collapsedSize: CGSize {

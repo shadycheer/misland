@@ -15,6 +15,7 @@ struct PlaylistTrackRef: Identifiable, Equatable {
     let name: String
     let artist: String
     let source: SourceKind
+    var liked: Bool?        // Apple Music reports it inline; Spotify is filled by a batch check
 }
 
 /// Repeat mode, mapped per-player in the service.
@@ -69,6 +70,46 @@ enum PlaylistService {
         switch source {
         case .spotify:    SpotifyCLI.setRepeat(mode)
         case .appleMusic: AppleMusicScript.setRepeat(mode)
+        }
+    }
+
+    // MARK: - Per-row enrichment (liked status + cover URLs)
+
+    /// Liked-status for a page of tracks → id:isLiked. Spotify batches one call;
+    /// Apple Music already carries it inline from the track query.
+    static func likedStatus(for tracks: [PlaylistTrackRef]) -> [String: Bool] {
+        guard let first = tracks.first else { return [:] }
+        switch first.source {
+        case .spotify:
+            return SpotifyCLI.contains(tracks.map { $0.id })
+        case .appleMusic:
+            var map: [String: Bool] = [:]
+            for t in tracks { if let l = t.liked { map[t.id] = l } }
+            return map
+        }
+    }
+
+    /// Cover URLs for a page of tracks → id:url (Spotify only; Apple Music art is
+    /// local and not exposed as a URL).
+    static func coverURLs(for tracks: [PlaylistTrackRef]) -> [String: String] {
+        guard let first = tracks.first, first.source == .spotify else { return [:] }
+        return SpotifyCLI.imageURLs(tracks.map { $0.id })
+    }
+
+    /// Cover URLs for playlist rows → id:url (Spotify only).
+    static func coverURLs(forPlaylists playlists: [PlaylistRef]) -> [String: String] {
+        guard let first = playlists.first, first.source == .spotify else { return [:] }
+        return SpotifyCLI.imageURLs(playlists.map { $0.id })
+    }
+
+    static func setLiked(_ liked: Bool, for track: PlaylistTrackRef, in playlist: PlaylistRef?) {
+        switch track.source {
+        case .spotify:
+            SpotifyCLI.setLiked(track.id, liked)
+        case .appleMusic:
+            if let playlist, let i = Int(track.id) {
+                AppleMusicScript.setFavorite(index: i, inPlaylistID: playlist.id, liked)
+            }
         }
     }
 }
@@ -130,7 +171,7 @@ private enum AppleMusicScript {
             repeat with i from 1 to lim
                 try
                     set t to track i of pl
-                    set out to out & i & "\(fieldSep)" & (name of t) & "\(fieldSep)" & (artist of t) & "\(rowSep)"
+                    set out to out & i & "\(fieldSep)" & (name of t) & "\(fieldSep)" & (artist of t) & "\(fieldSep)" & (favorited of t) & "\(rowSep)"
                 end try
             end repeat
             return out
@@ -139,9 +180,19 @@ private enum AppleMusicScript {
         guard let raw = run(script) else { return [] }
         return raw.components(separatedBy: rowSep).compactMap { row in
             let f = row.components(separatedBy: fieldSep)
-            guard f.count == 3, !f[0].isEmpty else { return nil }
-            return PlaylistTrackRef(id: f[0], name: f[1], artist: f[2], source: .appleMusic)
+            guard f.count == 4, !f[0].isEmpty else { return nil }
+            return PlaylistTrackRef(id: f[0], name: f[1], artist: f[2],
+                                    source: .appleMusic, liked: f[3] == "true")
         }
+    }
+
+    static func setFavorite(index: Int, inPlaylistID id: String, _ on: Bool) {
+        _ = run("""
+        tell application "Music"
+            set pl to (first user playlist whose persistent ID is "\(id)")
+            set favorited of track \(index) of pl to \(on ? "true" : "false")
+        end tell
+        """)
     }
 
     static func playPlaylist(id: String) {
