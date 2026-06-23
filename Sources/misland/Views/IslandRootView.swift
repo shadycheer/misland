@@ -185,7 +185,10 @@ struct IslandRootView: View {
     /// Browse the player you're currently using (fall back to whichever is set
     /// up). Resizing the window happens via the AppDelegate callback.
     private func openBrowser() {
-        let src = coordinator.state?.source ?? (SpotifyCLI.isAvailable ? .spotify : .appleMusic)
+        // QQ音乐 isn't browsable (AX-only), so fall back to a browsable player.
+        let active = coordinator.state?.source
+        let src: SourceKind = (active == .spotify || active == .appleMusic)
+            ? active! : (SpotifyCLI.isAvailable ? .spotify : .appleMusic)
         browser.open(source: src)
         islandState.browserOpen = true
         onBrowserResize(true)

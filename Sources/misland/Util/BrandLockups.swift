@@ -8,6 +8,7 @@ enum BrandLockup {
         switch source {
         case .spotify: return 823.46 / 225.25
         case .appleMusic: return 83.0 / 20.0
+        case .qqMusic: return 1
         case .none: return 1
         }
     }
@@ -17,6 +18,7 @@ enum BrandLockup {
         switch source {
         case .spotify: b64 = spotify
         case .appleMusic: b64 = appleMusic
+        case .qqMusic: b64 = qq
         case .none: return nil
         }
         guard let data = Data(base64Encoded: b64) else { return nil }

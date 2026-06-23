@@ -3,6 +3,7 @@ import AppKit
 enum SourceKind: String, Equatable {
     case spotify
     case appleMusic
+    case qqMusic
 }
 
 /// Openable links for the track's title / artist / album (e.g. spotify: URIs).

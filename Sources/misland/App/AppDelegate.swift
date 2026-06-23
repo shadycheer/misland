@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: PlaybackCoordinator!
     private var timer: Timer?
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
-    private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
+    private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource(), QQMusicSource()]
     private let pollQueue = DispatchQueue(label: "com.shadycheer.misland.poll")
     private let islandState = IslandState()
     private var collapsedScreenRect: CGRect = .zero  // exact screen rect of the pill

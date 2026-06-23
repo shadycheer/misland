@@ -36,10 +36,12 @@ enum CoverSource: Equatable {
 /// `spotify_cli`; Apple Music through AppleScript. Everything here is
 /// synchronous IPC — ALWAYS call off the main thread.
 enum PlaylistService {
+    // Note: QQ音乐 has no browsable playlist API (AX-only), so its cases no-op.
     static func playlists(_ source: SourceKind) -> [PlaylistRef] {
         switch source {
         case .spotify:    return SpotifyCLI.playlists()
         case .appleMusic: return AppleMusicScript.playlists()
+        case .qqMusic:    return []
         }
     }
 
@@ -47,6 +49,7 @@ enum PlaylistService {
         switch playlist.source {
         case .spotify:    return SpotifyCLI.tracks(inPlaylist: playlist.id)
         case .appleMusic: return AppleMusicScript.tracks(inPlaylistID: playlist.id)
+        case .qqMusic:    return []
         }
     }
 
@@ -55,6 +58,7 @@ enum PlaylistService {
         switch playlist.source {
         case .spotify:    SpotifyCLI.play(uri: playlist.id)
         case .appleMusic: AppleMusicScript.playPlaylist(id: playlist.id)
+        case .qqMusic:    break
         }
     }
 
@@ -65,6 +69,8 @@ enum PlaylistService {
             SpotifyCLI.play(uri: track.id)
         case .appleMusic:
             if let i = Int(track.id) { AppleMusicScript.playTrack(index: i, inPlaylistID: playlist.id) }
+        case .qqMusic:
+            break
         }
     }
 
@@ -72,6 +78,7 @@ enum PlaylistService {
         switch source {
         case .spotify:    SpotifyCLI.setShuffle(on)
         case .appleMusic: AppleMusicScript.setShuffle(on)
+        case .qqMusic:    break
         }
     }
 
@@ -79,6 +86,7 @@ enum PlaylistService {
         switch source {
         case .spotify:    SpotifyCLI.setRepeat(mode)
         case .appleMusic: AppleMusicScript.setRepeat(mode)
+        case .qqMusic:    break
         }
     }
 
@@ -95,6 +103,8 @@ enum PlaylistService {
             var map: [String: Bool] = [:]
             for t in tracks { if let l = t.liked { map[t.id] = l } }
             return map
+        case .qqMusic:
+            return [:]
         }
     }
 
@@ -119,6 +129,8 @@ enum PlaylistService {
             if let playlist, let i = Int(track.id) {
                 AppleMusicScript.setFavorite(index: i, inPlaylistID: playlist.id, liked)
             }
+        case .qqMusic:
+            break
         }
     }
 }

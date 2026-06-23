@@ -79,6 +79,7 @@ final class PlaylistBrowserModel {
         switch pl.source {
         case .spotify:    return coverByID[pl.id].map(CoverSource.url) ?? .none
         case .appleMusic: return .appleMusicPlaylist(playlistID: pl.id)
+        case .qqMusic:    return .none
         }
     }
 
@@ -90,6 +91,8 @@ final class PlaylistBrowserModel {
             if let pid = currentPlaylist?.id, let i = Int(t.id) {
                 return .appleMusicTrack(playlistID: pid, index: i)
             }
+            return .none
+        case .qqMusic:
             return .none
         }
     }
