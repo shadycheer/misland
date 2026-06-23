@@ -18,7 +18,6 @@ final class AppleMusicSource: NowPlayingSource {
     private let lock = NSLock()
     private var artID: String?
     private var art: NSImage?
-    private var fetching: String?
 
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
@@ -27,34 +26,19 @@ final class AppleMusicSource: NowPlayingSource {
         let fav = t.favorited ?? false       // fresh every poll so un-like syncs
         let artist = t.artist ?? ""
 
+        // Local/embedded artwork only — no network. Cache once found (stable
+        // NSImage instance so the UI doesn't re-render every poll); retry next
+        // poll while still nil (Music sometimes provides it a beat late).
         lock.lock()
         var artwork = (artID == id) ? art : nil
         lock.unlock()
-
-        if artwork == nil {
-            if let local = artworkImage(of: t) {
-                artwork = local
-                lock.lock(); art = local; artID = id; lock.unlock()
-            } else {
-                lock.lock(); let need = fetching != id; if need { fetching = id }; lock.unlock()
-                if need { fetchFallbackArtwork(id: id, artist: artist, title: name) }
-            }
+        if artwork == nil, let local = artworkImage(of: t) {
+            artwork = local
+            lock.lock(); art = local; artID = id; lock.unlock()
         }
 
         return Track(id: id, title: name, artist: artist, album: t.album ?? "",
                      duration: t.duration ?? 0, artwork: artwork, isLiked: fav)
-    }
-
-    /// On local-artwork miss, look the cover up via iTunes (off-main) and cache
-    /// it. Locks the id even on failure so we don't hammer the API every poll.
-    private func fetchFallbackArtwork(id: String, artist: String, title: String) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let img = ItunesArtwork.fetch(artist: artist, title: title)
-            guard let self else { return }
-            self.lock.lock()
-            self.art = img; self.artID = id; self.fetching = nil
-            self.lock.unlock()
-        }
     }
 
     /// Defensive artwork read. Bridging Music's `artworks` to `[MusicArtwork]`

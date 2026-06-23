@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="docs/hero.png" alt="MisLand" width="820">
-
 # MisLand
 
 **把正在播放的单曲,变成 Mac 刘海上的「灵动岛」。**
