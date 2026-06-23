@@ -50,27 +50,23 @@ struct IslandRootView: View {
     var body: some View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
-        // The ONLY animated dimension is height (top-anchored): hidden = 0,
-        // collapsed = pill, expanded/browser = full. Every state change —
-        // show/hide, expand/collapse, opening the list — is just grow-DOWN or
-        // roll-UP. No opacity, no crossfade, no gradient anywhere.
-        let h: CGFloat = visible ? (expanded ? expandedTotalHeight : collapsedHeight) : 0
+        let h = expanded ? expandedTotalHeight : collapsedHeight
         return ZStack(alignment: .top) {
             shape.fill(.black)
-            // Exactly one content for the current state, swapped INSTANTLY
-            // (.identity transition — never faded). The growing height clip
-            // reveals it from the top down.
-            Group {
-                if expanded { expandedView } else { collapsedView }
-            }
-            .transition(.identity)
+            collapsedView
+                .opacity(expanded ? 0 : 1)
+                .animation(.easeOut(duration: 0.08), value: expanded)
+            expandedView
+                .opacity(expanded ? 1 : 0)
+                .animation(.easeOut(duration: 0.08), value: expanded)
         }
-        .frame(height: h, alignment: .top)
-        .animation(sizeCurve, value: h)        // height = the only motion (down / up)
-        .frame(width: w)
-        .animation(nil, value: w)              // width snaps — no sideways / center motion
+        .frame(width: w, height: h, alignment: .top)
         .clipShape(shape)
-        .frame(width: IslandLayout.expandedWidth, height: max(expandedTotalHeight, 1), alignment: .top)
+        .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+        .animation(sizeCurve, value: expanded)
+        .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
+        .opacity(visible ? 1 : 0)
+        .animation(.easeInOut(duration: 0.25), value: visible)
         .onChange(of: coordinator.track?.id) { _, newID in
             if newID != nil { peek() }
         }
