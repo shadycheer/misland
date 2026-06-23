@@ -44,19 +44,23 @@ final class PlaybackCoordinator {
             guard src.isRunning else { return Read(source: src, state: nil, track: nil) }
             return Read(source: src, state: src.currentState(), track: src.currentTrack())
         }
-        // Stamp an activation whenever a source becomes playing or changes track.
+        // Stamp an activation whenever a source becomes playing or changes
+        // track. Track changes also matter while paused: AX-only sources such
+        // as QQ do not emit distributed notifications, and otherwise a paused
+        // Spotify/Apple Music track earlier in the source list can mask them.
         for r in reads {
             let kind = r.source.kind
             let playing = r.state?.isPlaying ?? false
             let id = r.track?.id
             let was = prev[kind]
-            if playing && (was?.playing != true || was?.trackID != id) {
+            if id != nil && (was?.playing != playing || was?.trackID != id) {
                 tick += 1
                 activation[kind] = tick
             }
             prev[kind] = (playing, id)
         }
         let active = selectActive(reads)
+        writeDebugSnapshot(reads: reads, active: active)
         activeKind = active?.source.kind
         // Exclusive playback (idempotent): pause every playing source that isn't
         // the active one. The active source is stable (most-recently-activated),
@@ -66,8 +70,13 @@ final class PlaybackCoordinator {
                 r.source.pause()
             }
         }
-        if let active, let t = active.track, let st = active.state {
-            return Snapshot(track: t, state: st, canLike: active.source.canSetLiked)
+        if let active, let t = active.track {
+            let state = active.state ?? PlaybackState(
+                isPlaying: false,
+                position: 0,
+                source: active.source.kind
+            )
+            return Snapshot(track: t, state: state, canLike: active.source.canSetLiked)
         }
         return Snapshot(track: nil, state: nil, canLike: false)
     }
@@ -81,10 +90,10 @@ final class PlaybackCoordinator {
         }) {
             return best
         }
-        if let k = activeKind, let r = reads.first(where: { $0.source.kind == k && $0.track != nil }) {
-            return r
-        }
-        return reads.first { $0.track != nil }
+        let withTrack = reads.filter { $0.track != nil }
+        return withTrack.max(by: {
+            (activation[$0.source.kind] ?? 0) < (activation[$1.source.kind] ?? 0)
+        })
     }
 
     /// Apply a snapshot to the observable state. MAIN THREAD ONLY.
@@ -126,5 +135,33 @@ final class PlaybackCoordinator {
 
     private func source(for kind: SourceKind) -> NowPlayingSource? {
         sources.first { $0.kind == kind }
+    }
+
+    private func writeDebugSnapshot(reads: [Read], active: Read?) {
+        let flag = URL(fileURLWithPath: "/tmp/misland-debug-on")
+        guard FileManager.default.fileExists(atPath: flag.path) else { return }
+        var lines: [String] = [
+            "time=\(Date())",
+            "active=\(active?.source.kind.rawValue ?? "nil")",
+        ]
+        for r in reads {
+            lines.append([
+                "source=\(r.source.kind.rawValue)",
+                "running=\(r.source.isRunning)",
+                "track=\(r.track.map { "\($0.title) - \($0.artist)" } ?? "nil")",
+                "trackID=\(r.track?.id ?? "nil")",
+                "album=\(r.track?.album ?? "nil")",
+                "duration=\(r.track.map { String(Int($0.duration)) } ?? "nil")",
+                "artwork=\(r.track?.artwork == nil ? "nil" : "yes")",
+                "position=\(r.state.map { String(format: "%.1f", $0.position) } ?? "nil")",
+                "playing=\(r.state.map { String($0.isPlaying) } ?? "nil")",
+                "canLike=\(r.source.canSetLiked)",
+            ].joined(separator: " "))
+        }
+        try? (lines.joined(separator: "\n") + "\n").write(
+            to: URL(fileURLWithPath: "/tmp/misland-source-snapshot.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 }

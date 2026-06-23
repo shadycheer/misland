@@ -71,7 +71,9 @@ struct IslandRootView: View {
         .clipShape(shape)
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
         .animation(sizeCurve, value: expanded)
-        .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
+        // Opening/closing the playlist uses the SAME springs as the main panel —
+        // grow down on open, roll up on close (consistent feel).
+        .animation(islandState.browserOpen ? expandCurve : collapseCurve, value: islandState.browserOpen)
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.25), value: visible)
         .onChange(of: coordinator.track?.id) { _, newID in
@@ -130,7 +132,13 @@ struct IslandRootView: View {
             if let img = coordinator.track?.artwork {
                 Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
-                Color.white.opacity(0.18)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(.white.opacity(0.18))
+                    Image(systemName: "music.note")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
             }
         }
         .frame(width: 20, height: 20)

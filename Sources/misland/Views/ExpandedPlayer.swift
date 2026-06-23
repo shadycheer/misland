@@ -16,23 +16,26 @@ struct ExpandedPlayer: View {
     @AppStorage("showExportButton") private var showExportButton = true
     @State private var copied = false
 
+    private var hasAlbum: Bool { !(track?.album ?? "").isEmpty && track?.album != track?.title }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
                 artwork
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     LinkText(text: track?.title ?? "未在播放", link: track?.links?.track,
                              font: .system(size: 15, weight: .semibold),
                              color: .white, onOpen: onOpen)
                     LinkText(text: track?.artist ?? "", link: track?.links?.artist,
                              font: .system(size: 12),
                              color: .white.opacity(0.65), onOpen: onOpen)
-                    LinkText(text: track?.album ?? "", link: track?.links?.album,
-                             font: .system(size: 11),
-                             color: .white.opacity(0.4), onOpen: onOpen)
-                    Spacer(minLength: 0)
+                    if hasAlbum {
+                        LinkText(text: track?.album ?? "", link: track?.links?.album,
+                                 font: .system(size: 11),
+                                 color: .white.opacity(0.4), onOpen: onOpen)
+                    }
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: 8)
                 HStack(spacing: 14) {
                     if showExportButton, track != nil {
                         ControlButton(system: copied ? "checkmark" : "square.and.arrow.up",
@@ -53,14 +56,16 @@ struct ExpandedPlayer: View {
                     }
                 }
             }
-            .frame(height: 64)
+            .frame(height: 68)
 
+            Spacer(minLength: 10)
             progress
+            Spacer(minLength: 12)
             transport
         }
         .padding(.horizontal, 18)
-        .padding(.top, 16)
-        .padding(.bottom, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 16)
         .frame(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight, alignment: .top)
     }
 
@@ -69,11 +74,16 @@ struct ExpandedPlayer: View {
             if let img = track?.artwork {
                 Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
-                Color.white.opacity(0.12)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.12))
+                    Image(systemName: "music.note")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
             }
         }
-        .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(width: 68, height: 68)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var progress: some View {
@@ -111,7 +121,6 @@ struct ExpandedPlayer: View {
             ControlButton(system: "forward.fill", size: 15, action: onNext)
         }
         .frame(maxWidth: .infinity)
-        .offset(y: -8)   // nudge the transport up a touch; progress stays put
     }
 
     private func fmt(_ s: TimeInterval) -> String {

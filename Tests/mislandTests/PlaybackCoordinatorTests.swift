@@ -79,6 +79,23 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertEqual(c.state?.source, .appleMusic)
     }
 
+    func test_whenNonePlaying_mostRecentlyChangedTrackWins() {
+        let spotify = MockNowPlayingSource(kind: .spotify)
+        let qq = MockNowPlayingSource(kind: .qqMusic)
+        spotify.track = makeTrack("s1")
+        spotify.state = PlaybackState(isPlaying: false, position: 0, source: .spotify)
+        qq.track = makeTrack("q1")
+        qq.state = PlaybackState(isPlaying: false, position: 0, source: .qqMusic)
+
+        let c = PlaybackCoordinator(sources: [spotify, qq])
+        c.refresh()
+        XCTAssertEqual(c.state?.source, .qqMusic)
+
+        spotify.track = makeTrack("s2")
+        c.refresh()
+        XCTAssertEqual(c.state?.source, .spotify)
+    }
+
     func test_noSourcePlaying_clearsTrack() {
         let spotify = MockNowPlayingSource(kind: .spotify, isRunning: false)
         let c = PlaybackCoordinator(sources: [spotify])

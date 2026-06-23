@@ -7,12 +7,27 @@ import ApplicationServices
 /// and the menu bar "播放控制" offers pressable transport. So we read from the AX
 /// tree and control through menu-bar AXPress. Requires Accessibility permission.
 ///
-/// Limitations (AX exposes nothing more): no album art, no position/duration.
+/// AX is still the source of truth for "what is currently selected/playing".
+/// QQ's local PlayingList archive then enriches that AX snapshot with album art,
+/// duration, and stable song ids.
 final class QQMusicSource: NowPlayingSource {
     let kind: SourceKind = .qqMusic
     var canSetLiked: Bool { AXUI.isTrusted }
 
     private let bundleID = "com.tencent.QQMusicMac"
+    private let metadataStore: QQMusicArchiveMetadataStore
+    private let lock = NSLock()
+    private var artID: String?
+    private var art: NSImage?
+    private var fetchingArt: String?
+    private var progressTrackID: String?
+    private var progressAnchorDate: Date?
+    private var progressAnchorPosition: TimeInterval = 0
+    private var lastPlaying = false
+
+    init(metadataStore: QQMusicArchiveMetadataStore = .shared) {
+        self.metadataStore = metadataStore
+    }
 
     var isRunning: Bool { AXUI.runningApp(bundleID) != nil }
 
@@ -29,11 +44,19 @@ final class QQMusicSource: NowPlayingSource {
         return nil
     }
 
-    func currentTrack() -> Track? {
+    private struct PlaybarSnapshot {
+        var title: String
+        var artist: String
+        var liked: Bool?
+        var playing: Bool?
+    }
+
+    private func snapshot() -> PlaybarSnapshot? {
         guard let bar = playbar() else { return nil }
         var title: String?
         var artist = ""
         var liked: Bool?
+        var playing: Bool?
         for el in AXUI.children(bar) {
             guard let d = AXUI.desc(el) else { continue }
             if d.hasPrefix("歌曲名：") {
@@ -46,28 +69,86 @@ final class QQMusicSource: NowPlayingSource {
                 }
             } else if d.contains("取消喜欢") || d.contains("已喜欢") {
                 liked = true
-            } else if d.contains("喜欢歌曲") || d == "喜欢" {
+            } else if d.contains("添加到我喜欢") || d.contains("喜欢歌曲") || d == "喜欢" {
                 liked = false
+            } else if d == "暂停" || d.contains("暂停") {
+                playing = true
+            } else if d == "播放" {
+                playing = false
             }
         }
         guard let title, !title.isEmpty else { return nil }
-        return Track(id: "qq:\(title)|\(artist)", title: title, artist: artist,
-                     album: "", duration: 0, artwork: nil, isLiked: liked)
+        return PlaybarSnapshot(title: title, artist: artist, liked: liked, playing: playing)
+    }
+
+    func currentTrack() -> Track? {
+        guard let snapshot = snapshot() else { return nil }
+        let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
+        let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
+        let artworkURL = metadata?.artworkURL
+
+        lock.lock()
+        let cachedArt = (artID == id) ? art : nil
+        let needArt = artworkURL != nil && artID != id && fetchingArt != id
+        if needArt { fetchingArt = id }
+        lock.unlock()
+
+        if needArt, let artworkURL {
+            ArtworkCache.shared.image(for: artworkURL) { [weak self] image in
+                guard let self else { return }
+                self.lock.lock()
+                self.art = image
+                self.artID = id
+                self.fetchingArt = nil
+                self.lock.unlock()
+            }
+        }
+
+        return Track(
+            id: id,
+            title: snapshot.title,
+            artist: metadata?.artist.isEmpty == false ? metadata!.artist : snapshot.artist,
+            album: metadata?.album ?? "",
+            duration: metadata?.duration ?? 0,
+            artwork: cachedArt,
+            isLiked: snapshot.liked,
+            links: TrackLinks(
+                track: metadata?.songMid.map { "https://y.qq.com/n/ryqq/songDetail/\($0)" },
+                artist: nil,
+                album: nil
+            )
+        )
     }
 
     func currentState() -> PlaybackState? {
-        guard let bar = playbar() else { return nil }
-        // The toggle button reads "暂停" while playing, "播放" while paused.
-        var playing: Bool?
-        for el in AXUI.children(bar) {
-            switch AXUI.desc(el) {
-            case "暂停": playing = true
-            case "播放": playing = false
-            default: continue
-            }
+        guard let snapshot = snapshot(), let playing = snapshot.playing else { return nil }
+        let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
+        let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
+        let duration = metadata?.duration ?? 0
+
+        lock.lock()
+        let now = Date()
+        if progressTrackID != id {
+            progressTrackID = id
+            progressAnchorDate = now
+            progressAnchorPosition = 0
+        } else if playing != lastPlaying {
+            progressAnchorPosition = estimatedPosition(now: now, duration: duration)
+            progressAnchorDate = now
         }
-        guard let playing else { return nil }
-        return PlaybackState(isPlaying: playing, position: 0, source: .qqMusic)
+        lastPlaying = playing
+        let position = estimatedPosition(now: now, duration: duration)
+        lock.unlock()
+
+        return PlaybackState(isPlaying: playing, position: position, source: .qqMusic)
+    }
+
+    private func estimatedPosition(now: Date, duration: TimeInterval) -> TimeInterval {
+        guard lastPlaying, let progressAnchorDate else {
+            return min(progressAnchorPosition, max(duration, 0))
+        }
+        let value = progressAnchorPosition + now.timeIntervalSince(progressAnchorDate)
+        return duration > 0 ? min(value, duration) : value
     }
 
     // MARK: Control — via the "播放控制" menu (items are AXPress-able)
@@ -100,6 +181,7 @@ final class QQMusicSource: NowPlayingSource {
     func setLiked(_ liked: Bool) {
         guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         // One toggle item, titled for its action ("喜欢歌曲" to like / "取消喜欢" to unlike).
-        AXUI.pressMenuItem(app, menu: "播放控制", titleIn: liked ? ["喜欢歌曲"] : ["取消喜欢"])
+        AXUI.pressMenuItem(app, menu: "播放控制",
+                           titleIn: liked ? ["添加到我喜欢", "喜欢歌曲"] : ["取消喜欢"])
     }
 }
