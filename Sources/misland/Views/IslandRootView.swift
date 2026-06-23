@@ -7,8 +7,12 @@ struct IslandRootView: View {
     /// AppDelegate mouse monitor; `peeking` by track changes; `geo` follows the
     /// display the island is currently on.
     @State var islandState: IslandState
+    /// Called when the browser opens/closes so the AppDelegate can resize the
+    /// window (and refresh hit rects) to fit the taller panel.
+    var onBrowserResize: (Bool) -> Void = { _ in }
 
     @State private var peekTask: DispatchWorkItem?
+    @State private var browser = PlaylistBrowserModel()
     @AppStorage("autoPeek") private var autoPeek = true
 
     private var geo: IslandGeometry { islandState.geo }
@@ -21,7 +25,10 @@ struct IslandRootView: View {
     private var collapsedHeight: CGFloat {
         geo.hasNotch ? geo.notchHeight : geo.barHeight
     }
-    private var expandedTotalHeight: CGFloat { notchInset + IslandLayout.expandedHeight }
+    private var expandedContentHeight: CGFloat {
+        islandState.browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
+    }
+    private var expandedTotalHeight: CGFloat { notchInset + expandedContentHeight }
 
     // Cubic-bezier timing — expand pops with a slight overshoot, collapse snaps back.
     private let expandCurve = Animation.timingCurve(0.2, 1.25, 0.3, 1.0, duration: 0.42)
@@ -53,6 +60,7 @@ struct IslandRootView: View {
                    alignment: .top)
             .clipShape(shape)
             .animation(sizeCurve, value: expanded)
+            .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
             .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
             .opacity(visible ? 1 : 0)
             .animation(.easeInOut(duration: 0.25), value: visible)
@@ -124,26 +132,45 @@ struct IslandRootView: View {
     private var expandedView: some View {
         VStack(spacing: 0) {
             if notchInset > 0 { Color.clear.frame(height: notchInset) }
-            ExpandedPlayer(
-                track: coordinator.track,
-                state: coordinator.state,
-                canLike: coordinator.canLike,
-                onPlayPause: coordinator.playPause,
-                onNext: coordinator.next,
-                onPrev: coordinator.previous,
-                onSeek: coordinator.seek(to:),
-                onToggleLike: coordinator.toggleLike,
-                onExport: { [coordinator] in
-                    Task { @MainActor in
-                        CardExporter.export(track: coordinator.track, source: coordinator.state?.source)
-                    }
-                },
-                onOpen: { link in
-                    if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                },
-                onSettings: { PreferencesWindowController.shared.show() }
-            )
+            if islandState.browserOpen {
+                PlaylistBrowserView(model: browser, onClose: closeBrowser)
+            } else {
+                ExpandedPlayer(
+                    track: coordinator.track,
+                    state: coordinator.state,
+                    canLike: coordinator.canLike,
+                    onPlayPause: coordinator.playPause,
+                    onNext: coordinator.next,
+                    onPrev: coordinator.previous,
+                    onSeek: coordinator.seek(to:),
+                    onToggleLike: coordinator.toggleLike,
+                    onExport: { [coordinator] in
+                        Task { @MainActor in
+                            CardExporter.export(track: coordinator.track, source: coordinator.state?.source)
+                        }
+                    },
+                    onOpen: { link in
+                        if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
+                    },
+                    onSettings: { PreferencesWindowController.shared.show() },
+                    onBrowse: openBrowser
+                )
+            }
         }
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
+    }
+
+    /// Browse the player you're currently using (fall back to whichever is set
+    /// up). Resizing the window happens via the AppDelegate callback.
+    private func openBrowser() {
+        let src = coordinator.state?.source ?? (SpotifyCLI.isAvailable ? .spotify : .appleMusic)
+        browser.open(source: src)
+        islandState.browserOpen = true
+        onBrowserResize(true)
+    }
+
+    private func closeBrowser() {
+        islandState.browserOpen = false
+        onBrowserResize(false)
     }
 }

@@ -60,4 +60,44 @@ enum SpotifyCLI {
         guard let url = URL(string: uri) else { return }
         NSWorkspace.shared.open(url)
     }
+
+    // MARK: - Playlist browsing
+
+    /// The user's playlists (saved + followed), in their library order.
+    static func playlists() -> [PlaylistRef] {
+        guard let data = run(["library", "list", "--type", "playlist", "--limit", "200", "--format", "json"]),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = obj["items"] as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let uri = item["uri"] as? String, let name = item["name"] as? String else { return nil }
+            return PlaylistRef(id: uri, name: name, source: .spotify)
+        }
+    }
+
+    /// The tracks inside a playlist (capped — these can be huge).
+    static func tracks(inPlaylist uri: String) -> [PlaylistTrackRef] {
+        guard let data = run(["playlist", "get", uri, "--limit", "300", "--format", "json"]),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tracks = obj["tracks"] as? [[String: Any]] else { return [] }
+        return tracks.compactMap { t in
+            guard let tURI = t["uri"] as? String, let name = t["name"] as? String else { return nil }
+            let artists = (t["artists"] as? [String]) ?? []
+            return PlaylistTrackRef(id: tURI, name: name, artist: artists.joined(separator: ", "), source: .spotify)
+        }
+    }
+
+    /// Start playing a context (playlist/album) or a single track URI.
+    static func play(uri: String) { run(["play", uri]) }
+
+    static func setShuffle(_ on: Bool) { run(["shuffle", on ? "on" : "off"]) }
+
+    static func setRepeat(_ mode: RepeatMode) {
+        let arg: String
+        switch mode {
+        case .off: arg = "off"
+        case .all: arg = "context"
+        case .one: arg = "track"
+        }
+        run(["repeat", arg])
+    }
 }

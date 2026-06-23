@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mouseMonitors: [Any] = []
     private var dwellWork: DispatchWorkItem?
     private var currentScreenFrame: CGRect = .null
+    private var currentScreen: NSScreen?
+    private var browserOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherInstances()
@@ -29,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         islandState.geo = geo
 
         let host = NSHostingView(rootView:
-            IslandRootView(coordinator: coordinator, islandState: islandState)
+            IslandRootView(coordinator: coordinator, islandState: islandState,
+                           onBrowserResize: { [weak self] open in self?.setBrowser(open: open) })
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
@@ -131,9 +134,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Move the island to `screen`: recompute geometry (notch vs floating),
     /// reposition the window top-center, and refresh hit rects.
     private func place(on screen: NSScreen) {
+        currentScreen = screen
         currentScreenFrame = screen.frame
         geo = geometry(for: screen)
         islandState.geo = geo
+        window.place(on: screen, size: expandedSize)
+        computeRects()
+    }
+
+    /// The browser makes the panel taller; resize the fixed window (and refresh
+    /// hit rects) so the expanded screen rect matches what's drawn.
+    private func setBrowser(open: Bool) {
+        guard browserOpen != open else { return }
+        browserOpen = open
+        guard let screen = currentScreen else { return }
         window.place(on: screen, size: expandedSize)
         computeRects()
     }
@@ -163,9 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var expandedSize: CGSize {
-        geo.hasNotch
-            ? CGSize(width: IslandLayout.expandedWidth, height: geo.notchHeight + IslandLayout.expandedHeight)
-            : CGSize(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight)
+        let content = browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
+        let notch = geo.hasNotch ? geo.notchHeight : 0
+        return CGSize(width: IslandLayout.expandedWidth, height: notch + content)
     }
 
     private var collapsedSize: CGSize {

@@ -10,5 +10,8 @@ final class IslandState {
     /// Geometry of the screen the island currently lives on — updated as the
     /// island follows the cursor across displays (notch vs floating).
     var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
-    var expanded: Bool { hovering || peeking }
+    /// The playlist browser keeps the island expanded (and taller) while open,
+    /// regardless of hover/peek.
+    var browserOpen = false
+    var expanded: Bool { hovering || peeking || browserOpen }
 }
