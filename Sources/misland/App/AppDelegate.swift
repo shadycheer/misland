@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         terminateOtherInstances()
         coordinator = PlaybackCoordinator(sources: sources)
 
-        let initial = screenUnderCursor() ?? NSScreen.main ?? NSScreen.screens.first
+        let initial = NSScreen.main ?? screenUnderCursor() ?? NSScreen.screens.first
         geo = initial.map(geometry(for:)) ?? geo
         islandState.geo = geo
 
@@ -76,12 +76,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// screen rect? Drives both click-through and (with a dwell) the expand state.
     private func onMouseMoved() {
         let loc = NSEvent.mouseLocation
-        // Follow the cursor across displays: re-place the island on whichever
-        // screen the pointer is on (notch screen → fused; else → floating top).
-        if let s = NSScreen.screens.first(where: { NSMouseInRect(loc, $0.frame, false) }),
-           s.frame != currentScreenFrame {
-            place(on: s)
-        }
         // The collapsed pill exists whenever there's a track (playing or paused);
         // the expanded panel only while already hovering. Idle = nothing to hit.
         let hasTrack = coordinator.track != nil
@@ -111,6 +105,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSScreen.screens.first { NSMouseInRect(loc, $0.frame, false) }
     }
 
+    /// Follow the *active* display — the screen whose window has keyboard focus
+    /// (i.e. where you clicked/are working), not the mouse. Cheap; called on app
+    /// switches and each poll. Won't yank the island mid-hover.
+    private func updateActiveScreen() {
+        guard !islandState.expanded, let target = NSScreen.main,
+              target.frame != currentScreenFrame else { return }
+        place(on: target)
+    }
+
     private func geometry(for screen: NSScreen) -> IslandGeometry {
         let notch = NotchGeometry.notchSize(
             forScreenWidth: screen.frame.width,
@@ -118,8 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             leftArea: screen.auxiliaryTopLeftArea,
             rightArea: screen.auxiliaryTopRightArea
         )
+        let bar = max(screen.frame.maxY - screen.visibleFrame.maxY, 22) // menu bar height
         return IslandGeometry(hasNotch: notch.height > 0,
-                              notchWidth: notch.width, notchHeight: notch.height)
+                              notchWidth: notch.width, notchHeight: notch.height,
+                              barHeight: bar)
     }
 
     /// Move the island to `screen`: recompute geometry (notch vs floating),
@@ -165,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var collapsedSize: CGSize {
         geo.hasNotch
             ? CGSize(width: geo.notchWidth + 2 * IslandLayout.sideWidth, height: geo.notchHeight)
-            : CGSize(width: IslandLayout.collapsedWidth, height: IslandLayout.collapsedHeight)
+            : CGSize(width: IslandLayout.collapsedWidth, height: geo.barHeight)
     }
 
     private func setupStatusItem() {
@@ -209,7 +214,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // off-main via pollOnce, so it never stutters the UI/animation.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.pollOnce()
+            self?.updateActiveScreen()
         }
+        // React promptly when you switch to an app on another display.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.updateActiveScreen() }
     }
 
     /// `open -n` can spawn multiple copies; extra instances each poll and draw

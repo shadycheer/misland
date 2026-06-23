@@ -38,7 +38,7 @@ import AppKit
     @objc optional var artist: String { get }
     @objc optional var album: String { get }
     @objc optional var duration: Double { get } // seconds
-    @objc optional var loved: Bool { get }
+    @objc optional var favorited: Bool { get }   // renamed from 'loved' in recent Music
     @objc optional var artworks: [MusicArtwork] { get }
 }
 

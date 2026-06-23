@@ -33,7 +33,7 @@ final class AppleMusicSource: NowPlayingSource {
             album: t.album ?? "",
             duration: t.duration ?? 0,
             artwork: artwork,
-            isLiked: t.loved ?? false
+            isLiked: t.favorited ?? false
         )
         // Lock the cache only once artwork is present (Music returns it late);
         // otherwise leave it so the next poll re-reads until the cover arrives.
@@ -69,6 +69,6 @@ final class AppleMusicSource: NowPlayingSource {
     }
     func setLiked(_ liked: Bool) {
         guard let t = app?.currentTrack as? SBObject else { return }
-        t.setValue(liked, forKey: "loved")
+        t.setValue(liked, forKey: "favorited")  // 'loved' was renamed; wrong key threw NSUnknownKeyException
     }
 }

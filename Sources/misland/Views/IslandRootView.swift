@@ -19,7 +19,7 @@ struct IslandRootView: View {
         geo.hasNotch ? geo.notchWidth + 2 * IslandLayout.sideWidth : IslandLayout.collapsedWidth
     }
     private var collapsedHeight: CGFloat {
-        geo.hasNotch ? geo.notchHeight : IslandLayout.collapsedHeight
+        geo.hasNotch ? geo.notchHeight : geo.barHeight
     }
     private var expandedTotalHeight: CGFloat { notchInset + IslandLayout.expandedHeight }
 
@@ -90,12 +90,18 @@ struct IslandRootView: View {
                 }
                 .frame(width: collapsedWidth, height: collapsedHeight)
             } else {
-                // No notch: compact pill, art + bars together (no empty gap).
-                HStack(spacing: 9) {
+                // No notch: a pill with art + song title (truncated) + bars.
+                HStack(spacing: 8) {
                     artworkThumb
+                    Text(coordinator.track?.title ?? "")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     AudioBars(playing: coordinator.state?.isPlaying ?? false)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .frame(width: collapsedWidth, height: collapsedHeight)
             }
         }

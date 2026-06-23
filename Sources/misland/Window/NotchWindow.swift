@@ -5,7 +5,7 @@ enum IslandLayout {
     static let expandedWidth: CGFloat = 380
     static let expandedHeight: CGFloat = 168
     static let sideWidth: CGFloat = 42        // art / bars zone on each side of the notch
-    static let collapsedWidth: CGFloat = 72   // no-notch compact pill (art + bars)
+    static let collapsedWidth: CGFloat = 220  // no-notch pill (art + title + bars)
     static let collapsedHeight: CGFloat = 32
 }
 
@@ -14,6 +14,9 @@ struct IslandGeometry {
     let hasNotch: Bool
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    /// Menu-bar height of the screen — the collapsed height on notch-less
+    /// displays, so the pill sits inside the bar instead of poking below it.
+    var barHeight: CGFloat = 24
 }
 
 /// Container view. Click-through is handled precisely by the app's global mouse
