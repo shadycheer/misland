@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var expandedScreenRect: CGRect = .zero   // exact screen rect when expanded
     private var mouseMonitors: [Any] = []
     private var dwellWork: DispatchWorkItem?
+    private var browserCloseWork: DispatchWorkItem?
     private var currentScreenFrame: CGRect = .null
     private var currentScreen: NSScreen?
     private var browserOpen = false
@@ -91,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if window.ignoresMouseEvents != !inside { window.ignoresMouseEvents = !inside }
 
         if inside {
+            browserCloseWork?.cancel(); browserCloseWork = nil
             if !islandState.hovering, dwellWork == nil {
                 let work = DispatchWorkItem { [weak self] in
                     self?.islandState.hovering = true
@@ -102,6 +104,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             dwellWork?.cancel(); dwellWork = nil
             if islandState.hovering { islandState.hovering = false }
+            // If the playlist browser is open and the cursor leaves, collapse back
+            // to the pill after a short grace (so a brief drift doesn't close it) —
+            // otherwise the island would sit there as "just the list".
+            if islandState.browserOpen, browserCloseWork == nil {
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self else { return }
+                    self.islandState.browserOpen = false
+                    self.setBrowser(open: false)
+                    self.browserCloseWork = nil
+                }
+                browserCloseWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+            }
         }
     }
 
