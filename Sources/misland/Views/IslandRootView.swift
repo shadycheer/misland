@@ -27,10 +27,10 @@ struct IslandRootView: View {
     private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
-    /// Only show the island while music is actually playing — or while the user
-    /// is interacting (hover) / a track just changed (peek). Idle = invisible,
-    /// so launching at login with nothing playing shows nothing.
-    private var visible: Bool { (coordinator.state?.isPlaying ?? false) || expanded }
+    /// Show whenever there's a current track (playing OR paused) — pausing must
+    /// not make it vanish. Hidden only when nothing is loaded (no player / no
+    /// track), e.g. launching at login with nothing going on.
+    private var visible: Bool { coordinator.track != nil || expanded }
 
     var body: some View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)

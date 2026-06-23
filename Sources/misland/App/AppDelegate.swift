@@ -86,11 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// screen rect? Drives both click-through and (with a dwell) the expand state.
     private func onMouseMoved() {
         let loc = NSEvent.mouseLocation
-        // The collapsed pill only exists while playing; the expanded panel only
-        // while already hovering. When idle there's nothing to interact with.
-        let playing = coordinator.state?.isPlaying ?? false
+        // The collapsed pill exists whenever there's a track (playing or paused);
+        // the expanded panel only while already hovering. Idle = nothing to hit.
+        let hasTrack = coordinator.track != nil
         let activeRect = islandState.expanded ? expandedScreenRect
-            : (playing ? collapsedScreenRect : .null)
+            : (hasTrack ? collapsedScreenRect : .null)
         let inside = activeRect.contains(loc)
 
         if window.ignoresMouseEvents != !inside { window.ignoresMouseEvents = !inside }
