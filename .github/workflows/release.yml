@@ -20,6 +20,9 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Install create-dmg
+        run: brew install create-dmg
+
       - name: Build & package DMG
         run: make dmg
 
