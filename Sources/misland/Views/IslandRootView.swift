@@ -10,6 +10,9 @@ struct IslandRootView: View {
     /// Called when the browser opens/closes so the AppDelegate can resize the
     /// window (and refresh hit rects) to fit the taller panel.
     var onBrowserResize: (Bool) -> Void = { _ in }
+    /// Pops the settings menu (更多设置 / 退出) at the cursor — handled by the
+    /// AppDelegate, which can show an NSMenu without the panel becoming key.
+    var onSettingsMenu: () -> Void = {}
 
     @State private var peekTask: DispatchWorkItem?
     @State private var browser = PlaylistBrowserModel()
@@ -170,11 +173,11 @@ struct IslandRootView: View {
     /// shoulders so they straddle the camera cutout.
     private var notchControls: some View {
         HStack(spacing: 0) {
-            StripButton(system: "music.note.list", action: openBrowser)
+            StripButton(system: "music.note.list", size: 17, action: openBrowser)
             Spacer(minLength: 0)
-            StripButton(system: "gearshape") { PreferencesWindowController.shared.show() }
+            StripButton(system: "gearshape", size: 17, action: onSettingsMenu)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
         .frame(width: IslandLayout.expandedWidth, height: stripHeight)
     }
 
@@ -196,14 +199,18 @@ struct IslandRootView: View {
 /// Small icon button for the notch strip — subtle by default, brightens on hover.
 private struct StripButton: View {
     let system: String
+    var size: CGFloat = 16
     let action: () -> Void
     @State private var hover = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(hover ? 1 : 0.55))
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(.white.opacity(hover ? 1 : 0.7))
+                .frame(width: size + 14, height: size + 10)   // generous hit area
+                .contentShape(Rectangle())
+                .scaleEffect(hover ? 1.12 : 1)
         }
         .buttonStyle(.plain)
         .onHover { h in

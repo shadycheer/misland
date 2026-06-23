@@ -60,4 +60,32 @@ final class ArtworkCache {
             DispatchQueue.main.async { waiters.forEach { $0(image) } }
         }.resume()
     }
+
+    /// Memoize an image produced by a synchronous `loader` (e.g. local Apple
+    /// Music artwork via ScriptingBridge), keyed by `key`. The loader runs once
+    /// off-main; concurrent requests for the same key share it. Completion on main.
+    func image(key: String, loader: @escaping () -> NSImage?, completion: @escaping (NSImage?) -> Void) {
+        if let img = cached(key) {
+            DispatchQueue.main.async { completion(img) }
+            return
+        }
+        lock.lock()
+        if inflight[key] != nil {
+            inflight[key]?.append(completion)
+            lock.unlock()
+            return
+        }
+        inflight[key] = [completion]
+        lock.unlock()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let image = loader()
+            if let image { self.cache.setObject(image, forKey: key as NSString) }
+            self.lock.lock()
+            let waiters = self.inflight.removeValue(forKey: key) ?? []
+            self.lock.unlock()
+            DispatchQueue.main.async { waiters.forEach { $0(image) } }
+        }
+    }
 }

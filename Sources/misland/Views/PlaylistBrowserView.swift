@@ -75,6 +75,25 @@ final class PlaylistBrowserModel {
 
     func isLiked(_ track: PlaylistTrackRef) -> Bool { likedByID[track.id] ?? false }
 
+    func coverSource(forPlaylist pl: PlaylistRef) -> CoverSource {
+        switch pl.source {
+        case .spotify:    return coverByID[pl.id].map(CoverSource.url) ?? .none
+        case .appleMusic: return .appleMusicPlaylist(playlistID: pl.id)
+        }
+    }
+
+    func coverSource(forTrack t: PlaylistTrackRef) -> CoverSource {
+        switch t.source {
+        case .spotify:
+            return coverByID[t.id].map(CoverSource.url) ?? .none
+        case .appleMusic:
+            if let pid = currentPlaylist?.id, let i = Int(t.id) {
+                return .appleMusicTrack(playlistID: pid, index: i)
+            }
+            return .none
+        }
+    }
+
     func toggleLike(_ track: PlaylistTrackRef) {
         let next = !(likedByID[track.id] ?? false)
         likedByID[track.id] = next                       // optimistic
@@ -184,7 +203,7 @@ struct PlaylistBrowserView: View {
                         } else {
                             ForEach(model.playlists) { pl in
                                 PlaylistRow(name: pl.name,
-                                            coverURL: model.coverByID[pl.id],
+                                            cover: model.coverSource(forPlaylist: pl),
                                             onTap: { model.enter(pl) },
                                             onPlay: { model.play(pl) })
                             }
@@ -195,7 +214,7 @@ struct PlaylistBrowserView: View {
                         } else {
                             ForEach(model.tracks) { t in
                                 TrackRow(name: t.name, artist: t.artist,
-                                         coverURL: model.coverByID[t.id],
+                                         cover: model.coverSource(forTrack: t),
                                          liked: model.isLiked(t),
                                          onPlay: { model.play(t, in: pl) },
                                          onToggleLike: { model.toggleLike(t) })
@@ -221,14 +240,14 @@ struct PlaylistBrowserView: View {
 
 private struct PlaylistRow: View {
     let name: String
-    let coverURL: String?
+    let cover: CoverSource
     let onTap: () -> Void
     let onPlay: () -> Void
     @State private var hover = false
 
     var body: some View {
         HStack(spacing: 10) {
-            CoverThumb(url: coverURL)
+            CoverThumb(source: cover)
             Text(name)
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.9))
@@ -254,7 +273,7 @@ private struct PlaylistRow: View {
 private struct TrackRow: View {
     let name: String
     let artist: String
-    let coverURL: String?
+    let cover: CoverSource
     let liked: Bool
     let onPlay: () -> Void
     let onToggleLike: () -> Void
@@ -262,7 +281,7 @@ private struct TrackRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            CoverThumb(url: coverURL)
+            CoverThumb(source: cover)
             VStack(alignment: .leading, spacing: 1) {
                 Text(name)
                     .font(.system(size: 12.5))
@@ -292,8 +311,9 @@ private struct TrackRow: View {
 
 /// Lazily-loaded square cover for a row. Only fetches when the row appears
 /// (scroll-window), and re-uses ArtworkCache so scrolling back is instant.
+/// Spotify covers come from a URL; Apple Music covers are read locally.
 private struct CoverThumb: View {
-    let url: String?
+    let source: CoverSource
     @State private var image: NSImage?
 
     var body: some View {
@@ -313,13 +333,30 @@ private struct CoverThumb: View {
         .frame(width: 32, height: 32)
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .onAppear(perform: load)
-        .onChange(of: url) { _, _ in image = nil; load() }
+        .onChange(of: source) { _, _ in image = nil; load() }
     }
 
     private func load() {
-        guard image == nil, let url else { return }
-        if let cached = ArtworkCache.shared.cached(url) { image = cached; return }
-        ArtworkCache.shared.image(for: url) { img in if let img { image = img } }
+        guard image == nil else { return }
+        switch source {
+        case .none:
+            return
+        case .url(let s):
+            if let cached = ArtworkCache.shared.cached(s) { image = cached; return }
+            ArtworkCache.shared.image(for: s) { img in if let img { image = img } }
+        case .appleMusicTrack(let pid, let idx):
+            let key = "am:\(pid):\(idx)"
+            ArtworkCache.shared.image(key: key,
+                                      loader: { AppleMusicArtwork.trackImage(playlistID: pid, index: idx) }) {
+                img in if let img { image = img }
+            }
+        case .appleMusicPlaylist(let pid):
+            let key = "amp:\(pid)"
+            ArtworkCache.shared.image(key: key,
+                                      loader: { AppleMusicArtwork.playlistImage(playlistID: pid) }) {
+                img in if let img { image = img }
+            }
+        }
     }
 }
 

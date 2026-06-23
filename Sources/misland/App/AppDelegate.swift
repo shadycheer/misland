@@ -32,7 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let host = NSHostingView(rootView:
             IslandRootView(coordinator: coordinator, islandState: islandState,
-                           onBrowserResize: { [weak self] open in self?.setBrowser(open: open) })
+                           onBrowserResize: { [weak self] open in self?.setBrowser(open: open) },
+                           onSettingsMenu: { [weak self] in self?.popUpAppMenu() })
         )
         host.translatesAutoresizingMaskIntoConstraints = false
 
@@ -188,18 +189,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : CGSize(width: IslandLayout.collapsedWidth, height: geo.barHeight)
     }
 
-    /// Build a fresh menu (Preferences / Quit) bound to this app delegate —
-    /// used by the island's right-click menu (no menu-bar icon).
+    /// Build a fresh menu (更多设置 / 退出) bound to this app delegate — used by
+    /// the gear button and the island's right-click menu (no menu-bar icon).
     private func makeAppMenu() -> NSMenu {
         let menu = NSMenu()
-        let prefs = NSMenuItem(title: "偏好设置…", action: #selector(showPreferences), keyEquivalent: ",")
+        let prefs = NSMenuItem(title: "更多设置…", action: #selector(showPreferences), keyEquivalent: ",")
         prefs.target = self
-        let quitItem = NSMenuItem(title: "退出 MisLand", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "退出", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(prefs)
         menu.addItem(.separator())
         menu.addItem(quitItem)
         return menu
+    }
+
+    /// Pop the settings menu at the cursor. NSMenu runs its own tracking loop, so
+    /// it works even though the panel never becomes key.
+    private func popUpAppMenu() {
+        makeAppMenu().popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     @objc private func showPreferences() {

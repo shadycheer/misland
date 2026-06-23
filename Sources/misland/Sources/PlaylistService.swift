@@ -21,6 +21,15 @@ struct PlaylistTrackRef: Identifiable, Equatable {
 /// Repeat mode, mapped per-player in the service.
 enum RepeatMode: CaseIterable { case off, all, one }
 
+/// Where a row's cover comes from. Spotify covers are remote URLs; Apple Music
+/// covers are local (read via ScriptingBridge). `none` shows a placeholder.
+enum CoverSource: Equatable {
+    case none
+    case url(String)
+    case appleMusicTrack(playlistID: String, index: Int)
+    case appleMusicPlaylist(playlistID: String)
+}
+
 // MARK: - Service
 
 /// Local-only playlist browsing + control. Spotify goes through the bundled
