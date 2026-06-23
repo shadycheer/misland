@@ -44,12 +44,19 @@ final class PlaybackCoordinatorTests: XCTestCase {
         let c = PlaybackCoordinator(sources: [music])
         c.refresh()
 
-        c.playPause(); c.next(); c.previous(); c.seek(to: 42); c.toggleLike()
+        c.playPause(); c.next(); c.previous(); c.seek(to: 42)
 
         XCTAssertEqual(music.playPauseCalls, 1)
         XCTAssertEqual(music.nextCalls, 1)
         XCTAssertEqual(music.previousCalls, 1)
         XCTAssertEqual(music.seekedTo, 42)
+
+        c.toggleLike()
+        XCTAssertEqual(c.track?.isLiked, true)   // optimistic update is synchronous
+        // The source side-effect runs off-main; wait for it.
+        let exp = expectation(description: "setLiked off-main")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
         XCTAssertEqual(music.likedSetTo, true)
     }
 
