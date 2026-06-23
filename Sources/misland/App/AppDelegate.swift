@@ -199,8 +199,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(prefs)
         menu.addItem(.separator())
+        let axDump = NSMenuItem(title: "导出 AX 树（调试）", action: #selector(dumpAX), keyEquivalent: "")
+        axDump.target = self
+        menu.addItem(axDump)
+        menu.addItem(.separator())
         menu.addItem(quitItem)
         return menu
+    }
+
+    /// DEBUG: capture QQ音乐 / 网易云 Accessibility trees to the Desktop so we can
+    /// build the now-playing parser from the real element structure.
+    @objc private func dumpAX() {
+        let report = AccessibilityScanner.dumpTargetsToDesktop()
+        let alert = NSAlert()
+        alert.messageText = "AX 树导出"
+        alert.informativeText = report
+        alert.runModal()
     }
 
     /// Pop the settings menu at the cursor. NSMenu runs its own tracking loop, so
