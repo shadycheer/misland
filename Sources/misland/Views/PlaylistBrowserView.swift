@@ -269,7 +269,10 @@ private struct PlaylistRow: View {
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
-        .onHover { hover = $0 }
+        .onHover { h in
+            hover = h
+            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 }
 
@@ -308,7 +311,10 @@ private struct TrackRow: View {
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onPlay)
-        .onHover { hover = $0 }
+        .onHover { h in
+            hover = h
+            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 }
 
@@ -378,6 +384,9 @@ private struct IconButton: View {
                 .foregroundStyle(tint.opacity(hover ? 1 : 0.7))
         }
         .buttonStyle(.plain)
-        .onHover { hover = $0 }
+        .onHover { h in
+            hover = h
+            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 }

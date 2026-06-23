@@ -91,6 +91,37 @@ enum AccessibilityScanner {
             try? dump.write(to: url, atomically: true, encoding: .utf8)
             report += "\(name): \(url.path)\n"
         }
+        // Live QQ read probe — diagnoses why the source might be "not connecting".
+        let probe = probeQQ()
+        let probeURL = desktop.appendingPathComponent("misland-qq-probe.txt")
+        try? probe.write(to: probeURL, atomically: true, encoding: .utf8)
+        report += "qq-probe: \(probeURL.path)\n\n--- QQ probe ---\n" + probe
         return report
+    }
+
+    /// What QQMusicSource actually sees right now — trusted state, the playbar,
+    /// its children's descriptions, and the parsed result.
+    static func probeQQ() -> String {
+        var s = "AXIsProcessTrusted: \(isTrusted)\n"
+        let src = QQMusicSource()
+        s += "QQ isRunning: \(src.isRunning)\n"
+        if let app = AXUI.appElement(qqMusic) {
+            let wins = AXUI.windows(app)
+            s += "windows: \(wins.count)\n"
+            var found = false
+            for w in wins {
+                for c in AXUI.children(w) where AXUI.desc(c) == "播放控制栏" {
+                    found = true
+                    s += "playbar children:\n"
+                    for el in AXUI.children(c) { s += "  • \(AXUI.desc(el) ?? "<nil>")\n" }
+                }
+            }
+            s += "playbar found: \(found)\n"
+        } else {
+            s += "appElement = nil (not running, or not trusted)\n"
+        }
+        s += "currentTrack: " + (src.currentTrack().map { "\($0.title) — \($0.artist) liked=\(String(describing: $0.isLiked))" } ?? "nil") + "\n"
+        s += "currentState: " + (src.currentState().map { "playing=\($0.isPlaying)" } ?? "nil") + "\n"
+        return s
     }
 }

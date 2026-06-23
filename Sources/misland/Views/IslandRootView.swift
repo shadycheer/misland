@@ -64,11 +64,16 @@ struct IslandRootView: View {
                 .opacity(expanded ? 1 : 0)
                 .animation(.easeOut(duration: 0.08), value: expanded)
         }
-        .frame(width: w, height: h, alignment: .top)
+        // HEIGHT animates (top-anchored → the panel unrolls straight DOWN from the
+        // notch). WIDTH snaps with NO animation, so it never appears to grow out
+        // from the center. The two .animation modifiers are scoped to different
+        // frames: the inner one governs height, the outer governs width (nil).
+        .frame(height: h, alignment: .top)
+        .animation(sizeCurve, value: h)
+        .frame(width: w)
+        .animation(nil, value: w)
         .clipShape(shape)
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
-        .animation(sizeCurve, value: expanded)
-        .animation(.easeInOut(duration: 0.3), value: islandState.browserOpen)
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.25), value: visible)
         .onChange(of: coordinator.track?.id) { _, newID in
@@ -174,9 +179,9 @@ struct IslandRootView: View {
     /// shoulders so they straddle the camera cutout.
     private var notchControls: some View {
         HStack(spacing: 0) {
-            StripButton(system: "music.note.list", size: 17, action: openBrowser)
+            StripButton(system: "music.note.list", size: 15, action: openBrowser)
             Spacer(minLength: 0)
-            StripButton(system: "gearshape", size: 17, action: onSettingsMenu)
+            StripButton(system: "gearshape", size: 15, action: onSettingsMenu)
         }
         .padding(.horizontal, 18)
         .frame(width: IslandLayout.expandedWidth, height: stripHeight)
@@ -219,6 +224,7 @@ private struct StripButton: View {
         .buttonStyle(.plain)
         .onHover { h in
             withAnimation(.easeOut(duration: 0.12)) { hover = h }
+            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 }

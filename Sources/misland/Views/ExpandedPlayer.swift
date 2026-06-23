@@ -165,6 +165,7 @@ private struct ControlButton: View {
         .buttonStyle(.plain)
         .onHover { h in
             withAnimation(.easeOut(duration: 0.12)) { hover = h }
+            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 }
