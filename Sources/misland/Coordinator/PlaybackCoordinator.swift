@@ -44,31 +44,28 @@ final class PlaybackCoordinator {
             guard src.isRunning else { return Read(source: src, state: nil, track: nil) }
             return Read(source: src, state: src.currentState(), track: src.currentTrack())
         }
-        // Stamp an activation whenever a source becomes playing or changes track,
-        // and detect the playing<-not transition (for exclusive playback).
-        var becamePlaying: [SourceKind] = []
+        // Stamp an activation whenever a source becomes playing or changes track.
         for r in reads {
             let kind = r.source.kind
             let playing = r.state?.isPlaying ?? false
             let id = r.track?.id
             let was = prev[kind]
-            if playing && was?.playing != true { becamePlaying.append(kind) }
             if playing && (was?.playing != true || was?.trackID != id) {
                 tick += 1
                 activation[kind] = tick
             }
             prev[kind] = (playing, id)
         }
-        // Exclusive playback: when one source starts, pause the others that are
-        // playing — so only one player runs at a time.
-        if exclusivePlayback, let started = becamePlaying.last {
-            for r in reads where r.source.kind != started && r.state?.isPlaying == true {
-                r.source.pause()
-                prev[r.source.kind] = (false, r.track?.id)
-            }
-        }
         let active = selectActive(reads)
         activeKind = active?.source.kind
+        // Exclusive playback (idempotent): pause every playing source that isn't
+        // the active one. The active source is stable (most-recently-activated),
+        // so this can't ping-pong — it just keeps the non-active ones paused.
+        if exclusivePlayback, let active {
+            for r in reads where r.source.kind != active.source.kind && r.state?.isPlaying == true {
+                r.source.pause()
+            }
+        }
         if let active, let t = active.track, let st = active.state {
             return Snapshot(track: t, state: st, canLike: active.source.canSetLiked)
         }
