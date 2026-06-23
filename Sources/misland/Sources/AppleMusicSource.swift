@@ -25,7 +25,7 @@ final class AppleMusicSource: NowPlayingSource {
         if id == cachedID, let cached = cachedTrack { return cached }
 
         guard let name = t.name else { return nil }
-        let artwork = t.artworks?.first?.data
+        let artwork = artworkImage(of: t)
         let track = Track(
             id: id,
             title: name,
@@ -39,6 +39,17 @@ final class AppleMusicSource: NowPlayingSource {
         // otherwise leave it so the next poll re-reads until the cover arrives.
         if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
         return track
+    }
+
+    /// Defensive artwork read. Bridging Music's `artworks` to `[MusicArtwork]`
+    /// and taking `.first` traps (`_getElementSlowPath`) for items with no/odd
+    /// artwork (radio, non-library tracks). Go through NSArray + KVC instead.
+    private func artworkImage(of track: MusicTrack) -> NSImage? {
+        guard let sb = track as? SBObject,
+              let arr = sb.value(forKey: "artworks") as? NSArray,
+              arr.count > 0,
+              let first = arr.object(at: 0) as? NSObject else { return nil }
+        return first.value(forKey: "data") as? NSImage
     }
 
     func currentState() -> PlaybackState? {
