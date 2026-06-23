@@ -48,10 +48,14 @@ struct IslandRootView: View {
     private var visible: Bool { coordinator.track != nil || expanded }
 
     var body: some View {
-        // Bottom radius generous enough that the TALL expanded panel still reads
-        // as rounded (a small fixed radius looks square when tall, round when
-        // short — that was the "直角变圆角" during collapse).
-        let shape = NotchShape(topRadius: 6, bottomRadius: 22)
+        // Corner radii ANIMATE between states (NotchShape.animatableData rides the
+        // existing size animation). Collapsed = (6, 14) — the real MacBook notch's
+        // corner radius, so the pill blends with the hardware notch. Expanded =
+        // (19, 24) — rounder so the tall panel doesn't read as square. These exact
+        // pairs come from boring.notch, an overlay tuned to the physical notch.
+        let tr: CGFloat = expanded ? 19 : 6
+        let br: CGFloat = expanded ? 24 : 14
+        let shape = NotchShape(topRadius: tr, bottomRadius: br)
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
         let h = expanded ? expandedTotalHeight : collapsedHeight
         return ZStack(alignment: .top) {

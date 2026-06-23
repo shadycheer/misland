@@ -5,6 +5,21 @@ import ApplicationServices
 /// All reads are synchronous IPC — call off the main thread for polling; UI
 /// actions (button presses) are fine on main. Requires Accessibility permission.
 enum AXUI {
+    private static var didPromptForTrust = false
+
+    static var isTrusted: Bool { AXIsProcessTrusted() }
+
+    /// Ask macOS to show the Accessibility permission prompt once. Polling code
+    /// can call this safely; repeated calls only re-check the current state.
+    @discardableResult
+    static func requestTrustIfNeeded() -> Bool {
+        if AXIsProcessTrusted() { return true }
+        guard !didPromptForTrust else { return false }
+        didPromptForTrust = true
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(opts)
+    }
+
     static func runningApp(_ bundleID: String) -> NSRunningApplication? {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
     }
@@ -39,6 +54,22 @@ enum AXUI {
         (attr(app, kAXWindowsAttribute as String) as? [AXUIElement]) ?? []
     }
 
+    static func firstDescendant(
+        of root: AXUIElement,
+        maxDepth: Int = 10,
+        where matches: (AXUIElement) -> Bool
+    ) -> AXUIElement? {
+        func walk(_ el: AXUIElement, depth: Int) -> AXUIElement? {
+            if matches(el) { return el }
+            guard depth < maxDepth else { return nil }
+            for child in children(el) {
+                if let found = walk(child, depth: depth + 1) { return found }
+            }
+            return nil
+        }
+        return walk(root, depth: 0)
+    }
+
     static func desc(_ el: AXUIElement) -> String? { str(el, kAXDescriptionAttribute as String) }
     static func title(_ el: AXUIElement) -> String? { str(el, kAXTitleAttribute as String) }
 
@@ -54,6 +85,9 @@ enum AXUI {
         guard let bar = element(app, kAXMenuBarAttribute as String) else { return false }
         guard let barItem = children(bar).first(where: { title($0) == menuTitle }),
               let menu = children(barItem).first else { return false }
+        if children(menu).isEmpty {
+            _ = AXUIElementPerformAction(barItem, kAXShowMenuAction as CFString)
+        }
         for item in children(menu) where options.contains(title(item) ?? "") {
             return press(item)
         }

@@ -10,18 +10,20 @@ import ApplicationServices
 /// Limitations (AX exposes nothing more): no album art, no position/duration.
 final class QQMusicSource: NowPlayingSource {
     let kind: SourceKind = .qqMusic
-    var canSetLiked: Bool { AXIsProcessTrusted() }
+    var canSetLiked: Bool { AXUI.isTrusted }
 
     private let bundleID = "com.tencent.QQMusicMac"
 
     var isRunning: Bool { AXUI.runningApp(bundleID) != nil }
 
-    /// The "播放控制栏" group — a direct child of one of the app's windows.
+    /// The "播放控制栏" group somewhere inside one of the app's windows.
     private func playbar() -> AXUIElement? {
-        guard AXIsProcessTrusted(), let app = AXUI.appElement(bundleID) else { return nil }
+        guard AXUI.requestTrustIfNeeded(), let app = AXUI.appElement(bundleID) else { return nil }
         for window in AXUI.windows(app) {
-            for child in AXUI.children(window) where AXUI.desc(child) == "播放控制栏" {
-                return child
+            if let bar = AXUI.firstDescendant(of: window, where: {
+                AXUI.desc($0) == "播放控制栏" || AXUI.title($0) == "播放控制栏"
+            }) {
+                return bar
             }
         }
         return nil
@@ -31,7 +33,7 @@ final class QQMusicSource: NowPlayingSource {
         guard let bar = playbar() else { return nil }
         var title: String?
         var artist = ""
-        var liked = false
+        var liked: Bool?
         for el in AXUI.children(bar) {
             guard let d = AXUI.desc(el) else { continue }
             if d.hasPrefix("歌曲名：") {
@@ -44,6 +46,8 @@ final class QQMusicSource: NowPlayingSource {
                 }
             } else if d.contains("取消喜欢") || d.contains("已喜欢") {
                 liked = true
+            } else if d.contains("喜欢歌曲") || d == "喜欢" {
+                liked = false
             }
         }
         guard let title, !title.isEmpty else { return nil }
@@ -54,7 +58,7 @@ final class QQMusicSource: NowPlayingSource {
     func currentState() -> PlaybackState? {
         guard let bar = playbar() else { return nil }
         // The toggle button reads "暂停" while playing, "播放" while paused.
-        var playing = false
+        var playing: Bool?
         for el in AXUI.children(bar) {
             switch AXUI.desc(el) {
             case "暂停": playing = true
@@ -62,6 +66,7 @@ final class QQMusicSource: NowPlayingSource {
             default: continue
             }
         }
+        guard let playing else { return nil }
         return PlaybackState(isPlaying: playing, position: 0, source: .qqMusic)
     }
 
@@ -70,31 +75,31 @@ final class QQMusicSource: NowPlayingSource {
     private func app() -> AXUIElement? { AXUI.appElement(bundleID) }
 
     func playPause() {
-        guard let app = app() else { return }
+        guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["暂停", "播放"])
     }
 
     func pause() {
-        guard let app = app() else { return }
+        guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         // Only the "暂停" item exists while playing, so this is a no-op when paused.
         AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["暂停"])
     }
 
     func next() {
-        guard let app = app() else { return }
+        guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["下一首"])
     }
 
     func previous() {
-        guard let app = app() else { return }
+        guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["上一首"])
     }
 
     func seek(to position: TimeInterval) { /* AX exposes no seekable position */ }
 
     func setLiked(_ liked: Bool) {
-        guard let app = app() else { return }
+        guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
         // One toggle item, titled for its action ("喜欢歌曲" to like / "取消喜欢" to unlike).
-        AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["喜欢歌曲", "取消喜欢"])
+        AXUI.pressMenuItem(app, menu: "播放控制", titleIn: liked ? ["喜欢歌曲"] : ["取消喜欢"])
     }
 }
