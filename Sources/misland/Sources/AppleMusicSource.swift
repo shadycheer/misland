@@ -22,7 +22,14 @@ final class AppleMusicSource: NowPlayingSource {
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
         guard let id = t.id.map(String.init) else { return nil }   // 1 Apple Event
-        if id == cachedID, let cached = cachedTrack { return cached }
+        // Read like state FRESH every poll (cheap local AE) — caching it freezes
+        // the heart, so un-liking would snap back on the next tick.
+        let fav = t.favorited ?? false
+
+        if id == cachedID, var cached = cachedTrack {
+            cached.isLiked = fav
+            return cached
+        }
 
         guard let name = t.name else { return nil }
         let artwork = artworkImage(of: t)
@@ -33,7 +40,7 @@ final class AppleMusicSource: NowPlayingSource {
             album: t.album ?? "",
             duration: t.duration ?? 0,
             artwork: artwork,
-            isLiked: t.favorited ?? false
+            isLiked: fav
         )
         // Lock the cache only once artwork is present (Music returns it late);
         // otherwise leave it so the next poll re-reads until the cover arrives.
