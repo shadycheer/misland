@@ -119,7 +119,10 @@ struct IslandRootView: View {
                 onPrev: coordinator.previous,
                 onSeek: coordinator.seek(to:),
                 onToggleLike: coordinator.toggleLike,
-                onExport: { CardExporter.export(track: coordinator.track, source: coordinator.state?.source) }
+                onExport: { CardExporter.export(track: coordinator.track, source: coordinator.state?.source) },
+                onOpen: { link in
+                    if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
+                }
             )
         }
         .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)

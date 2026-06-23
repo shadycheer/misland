@@ -5,6 +5,13 @@ enum SourceKind: String, Equatable {
     case appleMusic
 }
 
+/// Openable links for the track's title / artist / album (e.g. spotify: URIs).
+struct TrackLinks: Equatable {
+    var track: String?
+    var artist: String?
+    var album: String?
+}
+
 struct Track: Equatable {
     let id: String          // stable per-track id (player track id or url)
     let title: String
@@ -13,11 +20,13 @@ struct Track: Equatable {
     let duration: TimeInterval
     var artwork: NSImage?
     var isLiked: Bool?      // nil = source can't report/like
+    var links: TrackLinks? = nil
 
     static func == (l: Track, r: Track) -> Bool {
         l.id == r.id && l.title == r.title && l.artist == r.artist
             && l.album == r.album && l.duration == r.duration
             && l.isLiked == r.isLiked
+            && l.links == r.links
             // Compare artwork by identity so a late-arriving cover (loaded async)
             // counts as a change and actually reaches the UI.
             && l.artwork === r.artwork

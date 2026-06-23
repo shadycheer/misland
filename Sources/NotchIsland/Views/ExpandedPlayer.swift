@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ExpandedPlayer: View {
     let track: Track?
@@ -10,6 +11,7 @@ struct ExpandedPlayer: View {
     let onSeek: (TimeInterval) -> Void
     let onToggleLike: () -> Void
     let onExport: () -> Void
+    let onOpen: (String?) -> Void
 
     @AppStorage("showExportButton") private var showExportButton = true
     @State private var copied = false
@@ -19,13 +21,15 @@ struct ExpandedPlayer: View {
             HStack(alignment: .top, spacing: 14) {
                 artwork
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(track?.title ?? "未在播放")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white).lineLimit(1)
-                    Text(track?.artist ?? "")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
-                    Text(track?.album ?? "")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.4)).lineLimit(1)
+                    LinkText(text: track?.title ?? "未在播放", link: track?.links?.track,
+                             font: .system(size: 15, weight: .semibold),
+                             color: .white, onOpen: onOpen)
+                    LinkText(text: track?.artist ?? "", link: track?.links?.artist,
+                             font: .system(size: 12),
+                             color: .white.opacity(0.65), onOpen: onOpen)
+                    LinkText(text: track?.album ?? "", link: track?.links?.album,
+                             font: .system(size: 11),
+                             color: .white.opacity(0.4), onOpen: onOpen)
                     Spacer(minLength: 0)
                 }
                 Spacer(minLength: 4)
@@ -113,6 +117,33 @@ struct ExpandedPlayer: View {
     private func fmt(_ s: TimeInterval) -> String {
         let t = Int(s.rounded())
         return String(format: "%d:%02d", t / 60, t % 60)
+    }
+}
+
+/// Text that opens a link on click (hover underline + pointer) when `link` is
+/// present; otherwise plain text.
+private struct LinkText: View {
+    let text: String
+    let link: String?
+    let font: Font
+    let color: Color
+    let onOpen: (String?) -> Void
+    @State private var hover = false
+
+    var body: some View {
+        if let link {
+            Text(text)
+                .font(font).foregroundStyle(color).lineLimit(1)
+                .underline(hover)
+                .contentShape(Rectangle())
+                .onHover { h in
+                    hover = h
+                    if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+                .onTapGesture { onOpen(link) }
+        } else {
+            Text(text).font(font).foregroundStyle(color).lineLimit(1)
+        }
     }
 }
 

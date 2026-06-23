@@ -22,6 +22,10 @@ final class SpotifySource: NowPlayingSource {
     private var likeID: String?
     private var liked: Bool?
     private var fetchingLike: String?
+    private var linkID: String?
+    private var artistURI: String?
+    private var albumURI: String?
+    private var fetchingLinks: String?
     private var pollCount = 0
 
     func currentTrack() -> Track? {
@@ -36,14 +40,19 @@ final class SpotifySource: NowPlayingSource {
         let likeStale = pollCount % 8 == 0
         let cachedArt = (artID == id) ? art : nil
         let cachedLiked = (likeID == id) ? liked : nil
+        let cachedArtist = (linkID == id) ? artistURI : nil
+        let cachedAlbum = (linkID == id) ? albumURI : nil
         let needArt = artID != id && fetchingArt != id
         let needLike = canSetLiked && (likeID != id || likeStale) && fetchingLike != id
+        let needLinks = linkID != id && fetchingLinks != id
         if needArt { fetchingArt = id }
         if needLike { fetchingLike = id }
+        if needLinks { fetchingLinks = id }
         lock.unlock()
 
         if needArt { fetchArtwork(id: id, urlString: t.artworkUrl) }
         if needLike { fetchLiked(id: id) }
+        if needLinks { fetchLinks(id: id) }
 
         return Track(
             id: id,
@@ -52,8 +61,20 @@ final class SpotifySource: NowPlayingSource {
             album: t.album ?? "",
             duration: Double(t.duration ?? 0) / 1000.0,
             artwork: cachedArt,
-            isLiked: cachedLiked
+            isLiked: cachedLiked,
+            links: TrackLinks(track: id, artist: cachedArtist, album: cachedAlbum)
         )
+    }
+
+    private func fetchLinks(id: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let (artist, album) = SpotifyCLI.links(forTrack: id)
+            guard let self else { return }
+            self.lock.lock()
+            self.artistURI = artist; self.albumURI = album
+            self.linkID = id; self.fetchingLinks = nil
+            self.lock.unlock()
+        }
     }
 
     private func fetchArtwork(id: String, urlString: String?) {

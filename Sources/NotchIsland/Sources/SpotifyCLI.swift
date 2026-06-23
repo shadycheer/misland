@@ -43,4 +43,21 @@ enum SpotifyCLI {
     static func setLiked(_ uri: String, _ liked: Bool) {
         run(["library", liked ? "add" : "remove", uri])
     }
+
+    /// Resolve a track URI to its artist + album URIs (for click-to-open).
+    static func links(forTrack uri: String) -> (artist: String?, album: String?) {
+        guard let data = run(["lookup", uri, "--format", "json"]),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entities = obj["entities"] as? [[String: Any]],
+              let entity = entities.first else { return (nil, nil) }
+        let album = (entity["parent"] as? [String: Any])?["uri"] as? String
+        let artist = ((entity["contributors"] as? [[String: Any]])?.first)?["uri"] as? String
+        return (artist, album)
+    }
+
+    /// Open a spotify: URI in the desktop app.
+    static func open(_ uri: String) {
+        guard let url = URL(string: uri) else { return }
+        NSWorkspace.shared.open(url)
+    }
 }
