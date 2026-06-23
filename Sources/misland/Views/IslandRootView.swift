@@ -48,7 +48,10 @@ struct IslandRootView: View {
     private var visible: Bool { coordinator.track != nil || expanded }
 
     var body: some View {
-        let shape = NotchShape(topRadius: 6, bottomRadius: 14)
+        // Bottom radius generous enough that the TALL expanded panel still reads
+        // as rounded (a small fixed radius looks square when tall, round when
+        // short — that was the "直角变圆角" during collapse).
+        let shape = NotchShape(topRadius: 6, bottomRadius: 22)
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
         let h = expanded ? expandedTotalHeight : collapsedHeight
         return ZStack(alignment: .top) {
