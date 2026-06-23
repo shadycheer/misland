@@ -12,40 +12,49 @@ final class AppleMusicSource: NowPlayingSource {
 
     var isRunning: Bool { app?.isRunning ?? false }
 
-    // Each SBObject property read is a separate synchronous Apple Event. Track
-    // metadata only changes on track change, so cache the whole Track keyed by
-    // id and re-read the full set only when the id changes. Unchanged polls cost
-    // a single Apple Event (the id check).
-    private var cachedID: String?
-    private var cachedTrack: Track?
+    // Resolved cover cached per track (a stable NSImage instance, so the UI
+    // doesn't re-render every poll). Local/embedded art is used first; on a miss
+    // (streaming tracks expose no bytes) we fall back to the iTunes Search API.
+    private let lock = NSLock()
+    private var artID: String?
+    private var art: NSImage?
+    private var fetching: String?
 
     func currentTrack() -> Track? {
         guard isRunning, let t = app?.currentTrack else { return nil }
-        guard let id = t.id.map(String.init) else { return nil }   // 1 Apple Event
-        // Read like state FRESH every poll (cheap local AE) — caching it freezes
-        // the heart, so un-liking would snap back on the next tick.
-        let fav = t.favorited ?? false
+        guard let id = t.id.map(String.init) else { return nil }
+        guard let name = t.name else { return nil }
+        let fav = t.favorited ?? false       // fresh every poll so un-like syncs
+        let artist = t.artist ?? ""
 
-        if id == cachedID, var cached = cachedTrack {
-            cached.isLiked = fav
-            return cached
+        lock.lock()
+        var artwork = (artID == id) ? art : nil
+        lock.unlock()
+
+        if artwork == nil {
+            if let local = artworkImage(of: t) {
+                artwork = local
+                lock.lock(); art = local; artID = id; lock.unlock()
+            } else {
+                lock.lock(); let need = fetching != id; if need { fetching = id }; lock.unlock()
+                if need { fetchFallbackArtwork(id: id, artist: artist, title: name) }
+            }
         }
 
-        guard let name = t.name else { return nil }
-        let artwork = artworkImage(of: t)
-        let track = Track(
-            id: id,
-            title: name,
-            artist: t.artist ?? "",
-            album: t.album ?? "",
-            duration: t.duration ?? 0,
-            artwork: artwork,
-            isLiked: fav
-        )
-        // Lock the cache only once artwork is present (Music returns it late);
-        // otherwise leave it so the next poll re-reads until the cover arrives.
-        if artwork != nil { cachedID = id; cachedTrack = track } else { cachedID = nil }
-        return track
+        return Track(id: id, title: name, artist: artist, album: t.album ?? "",
+                     duration: t.duration ?? 0, artwork: artwork, isLiked: fav)
+    }
+
+    /// On local-artwork miss, look the cover up via iTunes (off-main) and cache
+    /// it. Locks the id even on failure so we don't hammer the API every poll.
+    private func fetchFallbackArtwork(id: String, artist: String, title: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let img = ItunesArtwork.fetch(artist: artist, title: title)
+            guard let self else { return }
+            self.lock.lock()
+            self.art = img; self.artID = id; self.fetching = nil
+            self.lock.unlock()
+        }
     }
 
     /// Defensive artwork read. Bridging Music's `artworks` to `[MusicArtwork]`
