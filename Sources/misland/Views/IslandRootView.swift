@@ -37,9 +37,9 @@ struct IslandRootView: View {
     }
     private var expandedTotalHeight: CGFloat { stripHeight + expandedContentHeight }
 
-    // Cubic-bezier timing — expand pops with a slight overshoot, collapse snaps back.
-    private let expandCurve = Animation.timingCurve(0.2, 1.25, 0.3, 1.0, duration: 0.42)
-    private let collapseCurve = Animation.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.26)
+    // Critically damped springs — smooth grow/shrink with NO overshoot/bounce.
+    private let expandCurve = Animation.spring(response: 0.40, dampingFraction: 1.0)
+    private let collapseCurve = Animation.spring(response: 0.30, dampingFraction: 1.0)
     private var sizeCurve: Animation { expanded ? expandCurve : collapseCurve }
 
     /// Show whenever there's a current track (playing OR paused) — pausing must
@@ -51,17 +51,18 @@ struct IslandRootView: View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
         let h = expanded ? expandedTotalHeight : collapsedHeight
-        // Everything is TOP-anchored and clipped to the animating frame, so the
-        // panel grows straight down from the notch (no center-out / split feel).
-        // Content is masked by the growing height → revealed top-first.
+        // The expanded content is laid out full-size at the TOP and revealed by
+        // the growing height clip — so it unrolls straight down from the notch
+        // (no center-out, no fade-in-at-final-position pop). Collapsed/expanded
+        // swap near-instantly; the height spring does the visible motion.
         return ZStack(alignment: .top) {
             shape.fill(.black)
             collapsedView
                 .opacity(expanded ? 0 : 1)
-                .animation(.easeOut(duration: 0.10), value: expanded)
+                .animation(.easeOut(duration: 0.08), value: expanded)
             expandedView
                 .opacity(expanded ? 1 : 0)
-                .animation(.easeIn(duration: 0.18).delay(expanded ? 0.06 : 0), value: expanded)
+                .animation(.easeOut(duration: 0.08), value: expanded)
         }
         .frame(width: w, height: h, alignment: .top)
         .clipShape(shape)
