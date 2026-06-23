@@ -50,32 +50,27 @@ struct IslandRootView: View {
     var body: some View {
         let shape = NotchShape(topRadius: 6, bottomRadius: 14)
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
-        let h = expanded ? expandedTotalHeight : collapsedHeight
-        // The expanded content is laid out full-size at the TOP and revealed by
-        // the growing height clip — so it unrolls straight down from the notch
-        // (no center-out, no fade-in-at-final-position pop). Collapsed/expanded
-        // swap near-instantly; the height spring does the visible motion.
+        // The ONLY animated dimension is height (top-anchored): hidden = 0,
+        // collapsed = pill, expanded/browser = full. Every state change —
+        // show/hide, expand/collapse, opening the list — is just grow-DOWN or
+        // roll-UP. No opacity, no crossfade, no gradient anywhere.
+        let h: CGFloat = visible ? (expanded ? expandedTotalHeight : collapsedHeight) : 0
         return ZStack(alignment: .top) {
             shape.fill(.black)
-            collapsedView
-                .opacity(expanded ? 0 : 1)
-                .animation(.easeOut(duration: 0.08), value: expanded)
-            expandedView
-                .opacity(expanded ? 1 : 0)
-                .animation(.easeOut(duration: 0.08), value: expanded)
+            // Exactly one content for the current state, swapped INSTANTLY
+            // (.identity transition — never faded). The growing height clip
+            // reveals it from the top down.
+            Group {
+                if expanded { expandedView } else { collapsedView }
+            }
+            .transition(.identity)
         }
-        // HEIGHT animates (top-anchored → the panel unrolls straight DOWN from the
-        // notch). WIDTH snaps with NO animation, so it never appears to grow out
-        // from the center. The two .animation modifiers are scoped to different
-        // frames: the inner one governs height, the outer governs width (nil).
         .frame(height: h, alignment: .top)
-        .animation(sizeCurve, value: h)
+        .animation(sizeCurve, value: h)        // height = the only motion (down / up)
         .frame(width: w)
-        .animation(nil, value: w)
+        .animation(nil, value: w)              // width snaps — no sideways / center motion
         .clipShape(shape)
-        .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
-        .opacity(visible ? 1 : 0)
-        .animation(.easeInOut(duration: 0.25), value: visible)
+        .frame(width: IslandLayout.expandedWidth, height: max(expandedTotalHeight, 1), alignment: .top)
         .onChange(of: coordinator.track?.id) { _, newID in
             if newID != nil { peek() }
         }
