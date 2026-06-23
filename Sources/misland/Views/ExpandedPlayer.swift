@@ -19,8 +19,8 @@ struct ExpandedPlayer: View {
     private var hasAlbum: Bool { !(track?.album ?? "").isEmpty && track?.album != track?.title }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
                 artwork
                 VStack(alignment: .leading, spacing: 3) {
                     LinkText(text: track?.title ?? "未在播放", link: track?.links?.track,
@@ -28,15 +28,16 @@ struct ExpandedPlayer: View {
                              color: .white, onOpen: onOpen)
                     LinkText(text: track?.artist ?? "", link: track?.links?.artist,
                              font: .system(size: 12),
-                             color: .white.opacity(0.65), onOpen: onOpen)
+                             color: .white.opacity(0.6), onOpen: onOpen)
                     if hasAlbum {
                         LinkText(text: track?.album ?? "", link: track?.links?.album,
                                  font: .system(size: 11),
-                                 color: .white.opacity(0.4), onOpen: onOpen)
+                                 color: .white.opacity(0.38), onOpen: onOpen)
                     }
                 }
+                .padding(.top, 1)
                 Spacer(minLength: 8)
-                HStack(spacing: 14) {
+                HStack(spacing: 16) {
                     if showExportButton, track != nil {
                         ControlButton(system: copied ? "checkmark" : "square.and.arrow.up",
                                       size: 14, tint: copied ? .green : .white) {
@@ -49,22 +50,21 @@ struct ExpandedPlayer: View {
                         let liked = track?.isLiked ?? false
                         ControlButton(
                             system: liked ? "heart.fill" : "heart",
-                            size: 15,
+                            size: 16,
                             tint: liked ? .pink : .white,
                             action: onToggleLike
                         )
                     }
                 }
+                .padding(.top, 2)
             }
-            .frame(height: 68)
+            .frame(height: 60)
 
-            Spacer(minLength: 10)
             progress
-            Spacer(minLength: 12)
             transport
         }
         .padding(.horizontal, 18)
-        .padding(.top, 14)
+        .padding(.top, 16)
         .padding(.bottom, 16)
         .frame(width: IslandLayout.expandedWidth, height: IslandLayout.expandedHeight, alignment: .top)
     }
@@ -75,15 +75,15 @@ struct ExpandedPlayer: View {
                 Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.white.opacity(0.12))
                     Image(systemName: "music.note")
-                        .font(.system(size: 22, weight: .medium))
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
         }
-        .frame(width: 68, height: 68)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(width: 60, height: 60)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var progress: some View {

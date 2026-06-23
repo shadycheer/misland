@@ -3,7 +3,7 @@ import SwiftUI
 
 enum IslandLayout {
     static let expandedWidth: CGFloat = 380
-    static let expandedHeight: CGFloat = 188
+    static let expandedHeight: CGFloat = 180
     static let browserHeight: CGFloat = 392    // taller panel while the playlist browser is open
     static let noNotchStripHeight: CGFloat = 28 // top control strip height on notch-less screens
     static let sideWidth: CGFloat = 42        // art / bars zone on each side of the notch

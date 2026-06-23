@@ -16,6 +16,7 @@ final class QQMusicSource: NowPlayingSource {
 
     private let bundleID = "com.tencent.QQMusicMac"
     private let metadataStore: QQMusicArchiveMetadataStore
+    private let mediaRemote: QQMusicMediaRemoteNowPlaying
     private let lock = NSLock()
     private var artID: String?
     private var art: NSImage?
@@ -25,8 +26,12 @@ final class QQMusicSource: NowPlayingSource {
     private var progressAnchorPosition: TimeInterval = 0
     private var lastPlaying = false
 
-    init(metadataStore: QQMusicArchiveMetadataStore = .shared) {
+    init(
+        metadataStore: QQMusicArchiveMetadataStore = .shared,
+        mediaRemote: QQMusicMediaRemoteNowPlaying = .shared
+    ) {
         self.metadataStore = metadataStore
+        self.mediaRemote = mediaRemote
     }
 
     var isRunning: Bool { AXUI.runningApp(bundleID) != nil }
@@ -84,17 +89,26 @@ final class QQMusicSource: NowPlayingSource {
     func currentTrack() -> Track? {
         guard let snapshot = snapshot() else { return nil }
         let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
+        let mr = matchedMediaRemote(for: snapshot)
         let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
-        let artworkURL = metadata?.artworkURL
+        let artworkFileURL = metadata?.artworkFileURL
+        let mediaRemoteArtKey = mr?.artworkData.map { "qq-mediaremote:\(id):\($0.count):\($0.hashValue)" }
 
         lock.lock()
         let cachedArt = (artID == id) ? art : nil
-        let needArt = artworkURL != nil && artID != id && fetchingArt != id
+        let artLoadKey = mediaRemoteArtKey ?? artworkFileURL.map { "qq-local:\($0.path)" }
+        let needArt = artLoadKey != nil && artID != id && fetchingArt != id
         if needArt { fetchingArt = id }
         lock.unlock()
 
-        if needArt, let artworkURL {
-            ArtworkCache.shared.image(for: artworkURL) { [weak self] image in
+        if needArt, let artLoadKey {
+            ArtworkCache.shared.image(key: artLoadKey, loader: {
+                if let artworkData = mr?.artworkData {
+                    return NSImage(data: artworkData)
+                }
+                guard let artworkFileURL else { return nil }
+                return NSImage(contentsOf: artworkFileURL)
+            }) { [weak self] image in
                 guard let self else { return }
                 self.lock.lock()
                 self.art = image
@@ -107,9 +121,9 @@ final class QQMusicSource: NowPlayingSource {
         return Track(
             id: id,
             title: snapshot.title,
-            artist: metadata?.artist.isEmpty == false ? metadata!.artist : snapshot.artist,
-            album: metadata?.album ?? "",
-            duration: metadata?.duration ?? 0,
+            artist: bestArtist(ax: snapshot.artist, metadata: metadata, mediaRemote: mr),
+            album: bestAlbum(metadata: metadata, mediaRemote: mr),
+            duration: bestDuration(metadata: metadata, mediaRemote: mr),
             artwork: cachedArt,
             isLiked: snapshot.liked,
             links: TrackLinks(
@@ -123,6 +137,21 @@ final class QQMusicSource: NowPlayingSource {
     func currentState() -> PlaybackState? {
         guard let snapshot = snapshot(), let playing = snapshot.playing else { return nil }
         let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
+        if let mr = matchedMediaRemote(for: snapshot, maxAge: 0, timeout: 0.8) {
+            let position = mr.estimatedPosition(forcePaused: !playing)
+            writeDebug(
+                snapshot: snapshot,
+                mediaRemote: mr,
+                path: "mediaRemote",
+                position: position
+            )
+            return PlaybackState(
+                isPlaying: playing,
+                position: position,
+                source: .qqMusic
+            )
+        }
+
         let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
         let duration = metadata?.duration ?? 0
 
@@ -140,6 +169,7 @@ final class QQMusicSource: NowPlayingSource {
         let position = estimatedPosition(now: now, duration: duration)
         lock.unlock()
 
+        writeDebug(snapshot: snapshot, mediaRemote: mediaRemote.snapshot(maxAge: 0), path: "fallback", position: position)
         return PlaybackState(isPlaying: playing, position: position, source: .qqMusic)
     }
 
@@ -149,6 +179,74 @@ final class QQMusicSource: NowPlayingSource {
         }
         let value = progressAnchorPosition + now.timeIntervalSince(progressAnchorDate)
         return duration > 0 ? min(value, duration) : value
+    }
+
+    private func matchedMediaRemote(
+        for snapshot: PlaybarSnapshot,
+        maxAge: TimeInterval = 0.35,
+        timeout: TimeInterval = 0.25
+    ) -> QQMusicMediaRemoteNowPlaying.Snapshot? {
+        guard let mr = mediaRemote.snapshot(maxAge: maxAge, timeout: timeout),
+              mr.matches(title: snapshot.title, artist: snapshot.artist) else {
+            return nil
+        }
+        return mr
+    }
+
+    private func bestArtist(
+        ax: String,
+        metadata: QQMusicMetadata?,
+        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+    ) -> String {
+        if let metadata, !metadata.artist.isEmpty { return metadata.artist }
+        if let mediaRemote, !mediaRemote.artist.isEmpty { return mediaRemote.artist }
+        return ax
+    }
+
+    private func bestAlbum(
+        metadata: QQMusicMetadata?,
+        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+    ) -> String {
+        if let metadata, !metadata.album.isEmpty { return metadata.album }
+        return mediaRemote?.album ?? ""
+    }
+
+    private func bestDuration(
+        metadata: QQMusicMetadata?,
+        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+    ) -> TimeInterval {
+        if let duration = metadata?.duration, duration > 0 { return duration }
+        return mediaRemote?.duration ?? 0
+    }
+
+    private func writeDebug(
+        snapshot: PlaybarSnapshot,
+        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?,
+        path: String,
+        position: TimeInterval
+    ) {
+        let flag = URL(fileURLWithPath: "/tmp/misland-debug-on")
+        guard FileManager.default.fileExists(atPath: flag.path) else { return }
+        let lines = [
+            "time=\(Date())",
+            "path=\(path)",
+            "axTitle=\(snapshot.title)",
+            "axArtist=\(snapshot.artist)",
+            "axPlaying=\(snapshot.playing.map(String.init) ?? "nil")",
+            "mrTitle=\(mediaRemote?.title ?? "nil")",
+            "mrArtist=\(mediaRemote?.artist ?? "nil")",
+            "mrElapsed=\(mediaRemote.map { String(format: "%.3f", $0.elapsed) } ?? "nil")",
+            "mrDuration=\(mediaRemote.map { String(format: "%.3f", $0.duration) } ?? "nil")",
+            "mrRate=\(mediaRemote.map { String(format: "%.3f", $0.playbackRate) } ?? "nil")",
+            "mrTimestamp=\(mediaRemote?.timestamp.map(String.init) ?? "nil")",
+            "mrMatches=\(mediaRemote?.matches(title: snapshot.title, artist: snapshot.artist).description ?? "nil")",
+            "position=\(String(format: "%.3f", position))",
+        ]
+        try? (lines.joined(separator: "\n") + "\n").write(
+            to: URL(fileURLWithPath: "/tmp/misland-qq-debug.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     // MARK: Control — via the "播放控制" menu (items are AXPress-able)
@@ -176,7 +274,21 @@ final class QQMusicSource: NowPlayingSource {
         AXUI.pressMenuItem(app, menu: "播放控制", titleIn: ["上一首"])
     }
 
-    func seek(to position: TimeInterval) { /* AX exposes no seekable position */ }
+    func seek(to position: TimeInterval) {
+        guard let snapshot = snapshot(),
+              let mr = matchedMediaRemote(for: snapshot, maxAge: 0, timeout: 0.8) else {
+            return
+        }
+        let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
+        let duration = bestDuration(metadata: metadata, mediaRemote: mr)
+        if mediaRemote.seek(to: position, duration: duration) {
+            lock.lock()
+            progressTrackID = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
+            progressAnchorDate = Date()
+            progressAnchorPosition = duration > 0 ? min(max(position, 0), duration) : max(position, 0)
+            lock.unlock()
+        }
+    }
 
     func setLiked(_ liked: Bool) {
         guard AXUI.requestTrustIfNeeded(), let app = app() else { return }
