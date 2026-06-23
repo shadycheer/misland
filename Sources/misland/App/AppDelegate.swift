@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
     private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource()]
-    private let pollQueue = DispatchQueue(label: "com.shadycheer.notchisland.poll")
+    private let pollQueue = DispatchQueue(label: "com.shadycheer.misland.poll")
     private let islandState = IslandState()
     private var collapsedScreenRect: CGRect = .zero  // exact screen rect of the pill
     private var expandedScreenRect: CGRect = .zero   // exact screen rect when expanded
@@ -144,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "NotchIsland")
+        statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "MisLand")
         statusItem.menu = makeAppMenu()
     }
 
@@ -154,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let prefs = NSMenuItem(title: "偏好设置…", action: #selector(showPreferences), keyEquivalent: ",")
         prefs.target = self
-        let quitItem = NSMenuItem(title: "退出 NotchIsland", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "退出 MisLand", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(prefs)
         menu.addItem(.separator())

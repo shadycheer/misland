@@ -1,4 +1,4 @@
-@testable import NotchIsland
+@testable import misland
 import Foundation
 
 final class MockNowPlayingSource: NowPlayingSource {

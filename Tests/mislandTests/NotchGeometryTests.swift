@@ -1,4 +1,4 @@
-@testable import NotchIsland
+@testable import misland
 import XCTest
 
 final class NotchGeometryTests: XCTestCase {

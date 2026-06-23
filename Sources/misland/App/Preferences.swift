@@ -7,7 +7,7 @@ struct PreferencesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Notch Island").font(.system(size: 15, weight: .semibold))
+            Text("MisLand").font(.system(size: 15, weight: .semibold))
             Toggle("展开时显示「导出卡片」按钮", isOn: $showExportButton)
             Toggle("切歌时自动探头 2 秒", isOn: $autoPeek)
             Spacer(minLength: 0)

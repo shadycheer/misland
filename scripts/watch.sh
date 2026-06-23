@@ -12,9 +12,9 @@ while true; do
     [ -n "$last" ] && echo "🔁 change detected — rebuilding…"
     last="$cur"
     if make bundle >/tmp/notch-build.log 2>&1; then
-      killall NotchIsland 2>/dev/null
+      killall misland 2>/dev/null
       sleep 0.3
-      open -n .build/NotchIsland.app
+      open -n .build/misland.app
       echo "✅ relaunched at $(date +%H:%M:%S)"
     else
       echo "❌ build failed:"

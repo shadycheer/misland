@@ -1,4 +1,4 @@
-APP=NotchIsland
+APP=misland
 BUNDLE=.build/$(APP).app
 BIN=.build/release/$(APP)
 
@@ -11,7 +11,7 @@ bundle: build
 	cp $(BIN) $(BUNDLE)/Contents/MacOS/$(APP)
 	cp Resources/Info.plist $(BUNDLE)/Contents/Info.plist
 	codesign --force --sign - \
-	  --entitlements Resources/NotchIsland.entitlements \
+	  --entitlements Resources/misland.entitlements \
 	  $(BUNDLE)/Contents/MacOS/$(APP)
 
 run: bundle
