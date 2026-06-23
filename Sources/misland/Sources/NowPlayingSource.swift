@@ -10,6 +10,7 @@ protocol NowPlayingSource: AnyObject {
     func currentState() -> PlaybackState?
 
     func playPause()
+    func pause()
     func next()
     func previous()
     func seek(to position: TimeInterval)

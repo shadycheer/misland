@@ -98,7 +98,7 @@ struct IslandRootView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     AudioBars(playing: coordinator.state?.isPlaying ?? false)
                 }
                 .padding(.horizontal, 12)

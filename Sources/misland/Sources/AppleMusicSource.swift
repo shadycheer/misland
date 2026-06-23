@@ -56,7 +56,12 @@ final class AppleMusicSource: NowPlayingSource {
               let arr = sb.value(forKey: "artworks") as? NSArray,
               arr.count > 0,
               let first = arr.object(at: 0) as? NSObject else { return nil }
-        return first.value(forKey: "data") as? NSImage
+        // `data` is usually a TIFF NSImage, but local files sometimes expose the
+        // bytes via `rawData` (NSData) instead — try both.
+        if let img = first.value(forKey: "data") as? NSImage, img.isValid { return img }
+        if let data = first.value(forKey: "data") as? Data, let img = NSImage(data: data) { return img }
+        if let raw = first.value(forKey: "rawData") as? Data, let img = NSImage(data: raw) { return img }
+        return nil
     }
 
     func currentState() -> PlaybackState? {
@@ -69,6 +74,7 @@ final class AppleMusicSource: NowPlayingSource {
     }
 
     func playPause() { app?.playpause?() }
+    func pause() { app?.pause?() }
     func next() { app?.nextTrack?() }
     func previous() { app?.previousTrack?() }
     func seek(to position: TimeInterval) {

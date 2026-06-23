@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherInstances()
+        UserDefaults.standard.register(defaults: [
+            "showExportButton": true, "autoPeek": true, "exclusivePlayback": true,
+        ])
         coordinator = PlaybackCoordinator(sources: sources)
 
         let initial = NSScreen.main ?? screenUnderCursor() ?? NSScreen.screens.first

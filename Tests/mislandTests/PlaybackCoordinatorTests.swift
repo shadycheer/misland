@@ -86,4 +86,23 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertNil(c.track)
         XCTAssertNil(c.state)
     }
+
+    func test_exclusivePlayback_pausesTheOtherWhenOneStarts() {
+        UserDefaults.standard.set(true, forKey: "exclusivePlayback")
+        defer { UserDefaults.standard.removeObject(forKey: "exclusivePlayback") }
+        let spotify = MockNowPlayingSource(kind: .spotify)
+        let music = MockNowPlayingSource(kind: .appleMusic)
+        spotify.track = makeTrack("s1")
+        spotify.state = PlaybackState(isPlaying: true, position: 0, source: .spotify)
+        music.track = makeTrack("m1")
+        music.state = PlaybackState(isPlaying: false, position: 0, source: .appleMusic)
+
+        let c = PlaybackCoordinator(sources: [spotify, music])
+        c.refresh()                      // spotify playing, music paused
+        XCTAssertEqual(spotify.pauseCalls, 0)
+
+        music.state = PlaybackState(isPlaying: true, position: 0, source: .appleMusic)
+        c.refresh()                      // music starts → spotify paused
+        XCTAssertEqual(spotify.pauseCalls, 1)
+    }
 }

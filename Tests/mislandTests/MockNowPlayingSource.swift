@@ -9,6 +9,7 @@ final class MockNowPlayingSource: NowPlayingSource {
     var canSetLiked: Bool
 
     private(set) var playPauseCalls = 0
+    private(set) var pauseCalls = 0
     private(set) var nextCalls = 0
     private(set) var previousCalls = 0
     private(set) var seekedTo: TimeInterval?
@@ -23,6 +24,7 @@ final class MockNowPlayingSource: NowPlayingSource {
     func currentTrack() -> Track? { track }
     func currentState() -> PlaybackState? { state }
     func playPause() { playPauseCalls += 1 }
+    func pause() { pauseCalls += 1 }
     func next() { nextCalls += 1 }
     func previous() { previousCalls += 1 }
     func seek(to position: TimeInterval) { seekedTo = position }

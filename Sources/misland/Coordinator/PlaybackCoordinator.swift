@@ -15,6 +15,11 @@ final class PlaybackCoordinator {
     @ObservationIgnored private var activation: [SourceKind: Int] = [:]
     @ObservationIgnored private var tick = 0
 
+    /// When on, starting one player pauses the others (only one plays at a time).
+    @ObservationIgnored private var exclusivePlayback: Bool {
+        UserDefaults.standard.bool(forKey: "exclusivePlayback")
+    }
+
     init(sources: [NowPlayingSource]) {
         self.sources = sources
     }
@@ -39,17 +44,28 @@ final class PlaybackCoordinator {
             guard src.isRunning else { return Read(source: src, state: nil, track: nil) }
             return Read(source: src, state: src.currentState(), track: src.currentTrack())
         }
-        // Stamp an activation whenever a source becomes playing or changes track.
+        // Stamp an activation whenever a source becomes playing or changes track,
+        // and detect the playing<-not transition (for exclusive playback).
+        var becamePlaying: [SourceKind] = []
         for r in reads {
             let kind = r.source.kind
             let playing = r.state?.isPlaying ?? false
             let id = r.track?.id
             let was = prev[kind]
+            if playing && was?.playing != true { becamePlaying.append(kind) }
             if playing && (was?.playing != true || was?.trackID != id) {
                 tick += 1
                 activation[kind] = tick
             }
             prev[kind] = (playing, id)
+        }
+        // Exclusive playback: when one source starts, pause the others that are
+        // playing — so only one player runs at a time.
+        if exclusivePlayback, let started = becamePlaying.last {
+            for r in reads where r.source.kind != started && r.state?.isPlaying == true {
+                r.source.pause()
+                prev[r.source.kind] = (false, r.track?.id)
+            }
         }
         let active = selectActive(reads)
         activeKind = active?.source.kind

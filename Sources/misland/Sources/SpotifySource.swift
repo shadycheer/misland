@@ -111,6 +111,7 @@ final class SpotifySource: NowPlayingSource {
     }
 
     func playPause() { app?.playpause?() }
+    func pause() { app?.pause?() }
     func next() { app?.nextTrack?() }
     func previous() { app?.previousTrack?() }
     func seek(to position: TimeInterval) {
