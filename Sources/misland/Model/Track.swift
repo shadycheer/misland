@@ -1,9 +1,10 @@
 import AppKit
 
-enum SourceKind: String, Equatable {
+enum SourceKind: String, Equatable, Codable {
     case spotify
     case appleMusic
     case qqMusic
+    case neteaseMusic
 }
 
 /// Openable links for the track's title / artist / album (e.g. spotify: URIs).
@@ -38,4 +39,11 @@ struct PlaybackState: Equatable {
     var isPlaying: Bool
     var position: TimeInterval
     var source: SourceKind
+    var sampledAt: Date = Date()
+
+    static func == (l: PlaybackState, r: PlaybackState) -> Bool {
+        l.isPlaying == r.isPlaying
+            && l.position == r.position
+            && l.source == r.source
+    }
 }

@@ -38,6 +38,10 @@ final class QQMusicArchiveMetadataStore {
         } ?? load().first { $0.title == title }
     }
 
+    func currentQueue() -> [QQMusicMetadata] {
+        load()
+    }
+
     private func load() -> [QQMusicMetadata] {
         let url = archiveURL
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),

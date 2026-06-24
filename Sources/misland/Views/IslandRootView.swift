@@ -7,7 +7,7 @@ struct IslandRootView: View {
     /// AppDelegate mouse monitor; `peeking` by track changes; `geo` follows the
     /// display the island is currently on.
     @State var islandState: IslandState
-    /// Called when the browser opens/closes so the AppDelegate can resize the
+    /// Called when the history browser opens/closes so the AppDelegate can resize the
     /// window (and refresh hit rects) to fit the taller panel.
     var onBrowserResize: (Bool) -> Void = { _ in }
     /// Pops the settings menu (更多设置 / 退出) at the cursor — handled by the
@@ -15,7 +15,7 @@ struct IslandRootView: View {
     var onSettingsMenu: () -> Void = {}
 
     @State private var peekTask: DispatchWorkItem?
-    @State private var browser = PlaylistBrowserModel()
+    @State private var history = HistoryBrowserModel()
     @AppStorage("autoPeek") private var autoPeek = true
 
     private var geo: IslandGeometry { islandState.geo }
@@ -36,6 +36,7 @@ struct IslandRootView: View {
         islandState.browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
     }
     private var expandedTotalHeight: CGFloat { stripHeight + expandedContentHeight }
+    private var maxExpandedTotalHeight: CGFloat { stripHeight + IslandLayout.browserHeight }
 
     // Critically damped springs — smooth grow/shrink with NO overshoot/bounce.
     private let expandCurve = Animation.spring(response: 0.40, dampingFraction: 1.0)
@@ -59,21 +60,27 @@ struct IslandRootView: View {
         let w = expanded ? IslandLayout.expandedWidth : collapsedWidth
         let h = expanded ? expandedTotalHeight : collapsedHeight
         return ZStack(alignment: .top) {
-            shape.fill(.black)
-            collapsedView
-                .opacity(expanded ? 0 : 1)
-                .animation(.easeOut(duration: 0.08), value: expanded)
-            expandedView
-                .opacity(expanded ? 1 : 0)
-                .animation(.easeOut(duration: 0.08), value: expanded)
+            ZStack(alignment: .top) {
+                shape.fill(.black)
+                Group {
+                    if expanded {
+                        expandedView
+                            .transition(.identity)
+                    } else {
+                        collapsedView
+                            .transition(.identity)
+                    }
+                }
+                .transaction { tx in
+                    tx.disablesAnimations = true
+                }
+            }
+            .frame(width: w, height: h, alignment: .top)
+            .clipShape(shape)
+            .animation(sizeCurve, value: expanded)
+            .animation(islandState.browserOpen ? expandCurve : collapseCurve, value: islandState.browserOpen)
         }
-        .frame(width: w, height: h, alignment: .top)
-        .clipShape(shape)
-        .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
-        .animation(sizeCurve, value: expanded)
-        // Opening/closing the playlist uses the SAME springs as the main panel —
-        // grow down on open, roll up on close (consistent feel).
-        .animation(islandState.browserOpen ? expandCurve : collapseCurve, value: islandState.browserOpen)
+        .frame(width: IslandLayout.expandedWidth, height: maxExpandedTotalHeight, alignment: .top)
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.25), value: visible)
         .onChange(of: coordinator.track?.id) { _, newID in
@@ -150,8 +157,21 @@ struct IslandRootView: View {
     private var expandedView: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: stripHeight)   // notch-height strip (icons overlaid)
+            expandedContent
+        }
+        .frame(width: IslandLayout.expandedWidth, height: maxExpandedTotalHeight, alignment: .top)
+        // Browse (left shoulder) + settings (right shoulder), flanking the notch
+        // at its own height. Hidden while browsing (the browser has its own bar).
+        .overlay(alignment: .top) {
+            if !islandState.browserOpen { notchControls }
+        }
+    }
+
+    private var expandedContent: some View {
+        ZStack(alignment: .top) {
             if islandState.browserOpen {
-                PlaylistBrowserView(model: browser, onClose: closeBrowser)
+                HistoryBrowserView(model: history, onClose: closeBrowser)
+                    .transition(.identity)
             } else {
                 ExpandedPlayer(
                     track: coordinator.track,
@@ -171,13 +191,13 @@ struct IslandRootView: View {
                         if let link, let url = URL(string: link) { NSWorkspace.shared.open(url) }
                     }
                 )
+                .transition(.identity)
             }
         }
-        .frame(width: IslandLayout.expandedWidth, height: expandedTotalHeight, alignment: .top)
-        // Browse (left shoulder) + settings (right shoulder), flanking the notch
-        // at its own height. Hidden while browsing (the browser has its own bar).
-        .overlay(alignment: .top) {
-            if !islandState.browserOpen { notchControls }
+        .frame(width: IslandLayout.expandedWidth, height: IslandLayout.browserHeight, alignment: .top)
+        .clipped()
+        .transaction { tx in
+            tx.animation = nil
         }
     }
 
@@ -185,22 +205,18 @@ struct IslandRootView: View {
     /// shoulders so they straddle the camera cutout.
     private var notchControls: some View {
         HStack(spacing: 0) {
-            StripButton(system: "music.note.list", size: 15, action: openBrowser)
+            StripButton(system: "clock.arrow.circlepath", size: 15, action: openBrowser)
             Spacer(minLength: 0)
             StripButton(system: "gearshape", size: 15, action: onSettingsMenu)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, IslandLayout.expandedHorizontalPadding)
         .frame(width: IslandLayout.expandedWidth, height: stripHeight)
     }
 
-    /// Browse the player you're currently using (fall back to whichever is set
-    /// up). Resizing the window happens via the AppDelegate callback.
+    /// Open recent playback history. Resizing the window happens via the
+    /// AppDelegate callback.
     private func openBrowser() {
-        // QQ音乐 isn't browsable (AX-only), so fall back to a browsable player.
-        let active = coordinator.state?.source
-        let src: SourceKind = (active == .spotify || active == .appleMusic)
-            ? active! : (SpotifyCLI.isAvailable ? .spotify : .appleMusic)
-        browser.open(source: src)
+        history.open()
         islandState.browserOpen = true
         onBrowserResize(true)
     }

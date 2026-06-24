@@ -16,7 +16,7 @@ final class QQMusicSource: NowPlayingSource {
 
     private let bundleID = "com.tencent.QQMusicMac"
     private let metadataStore: QQMusicArchiveMetadataStore
-    private let mediaRemote: QQMusicMediaRemoteNowPlaying
+    private let mediaRemote: MediaRemoteClientNowPlaying
     private let lock = NSLock()
     private var artID: String?
     private var art: NSImage?
@@ -28,7 +28,7 @@ final class QQMusicSource: NowPlayingSource {
 
     init(
         metadataStore: QQMusicArchiveMetadataStore = .shared,
-        mediaRemote: QQMusicMediaRemoteNowPlaying = .shared
+        mediaRemote: MediaRemoteClientNowPlaying = .shared
     ) {
         self.metadataStore = metadataStore
         self.mediaRemote = mediaRemote
@@ -87,27 +87,31 @@ final class QQMusicSource: NowPlayingSource {
     }
 
     func currentTrack() -> Track? {
-        guard let snapshot = snapshot() else { return nil }
-        let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
-        let mr = matchedMediaRemote(for: snapshot)
-        let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
+        let ax = snapshot()
+        let mr = matchedMediaRemote(for: ax)
+        guard ax != nil || mr != nil else { return nil }
+
+        let title = ax?.title ?? mr?.title ?? ""
+        let artist = ax?.artist ?? mr?.artist ?? ""
+        let metadata = metadataStore.metadata(title: title, artist: artist)
+        let id = metadata?.stableID ?? mr?.id ?? "qq:\(title)|\(artist)"
         let artworkFileURL = metadata?.artworkFileURL
         let mediaRemoteArtKey = mr?.artworkData.map { "qq-mediaremote:\(id):\($0.count):\($0.hashValue)" }
 
         lock.lock()
         let cachedArt = (artID == id) ? art : nil
-        let artLoadKey = mediaRemoteArtKey ?? artworkFileURL.map { "qq-local:\($0.path)" }
+        let artLoadKey = artworkFileURL.map { "qq-local:\($0.path)" } ?? mediaRemoteArtKey
         let needArt = artLoadKey != nil && artID != id && fetchingArt != id
         if needArt { fetchingArt = id }
         lock.unlock()
 
         if needArt, let artLoadKey {
             ArtworkCache.shared.image(key: artLoadKey, loader: {
-                if let artworkData = mr?.artworkData {
-                    return NSImage(data: artworkData)
+                if let artworkFileURL, let image = NSImage(contentsOf: artworkFileURL) {
+                    return image
                 }
-                guard let artworkFileURL else { return nil }
-                return NSImage(contentsOf: artworkFileURL)
+                guard let artworkData = mr?.artworkData else { return nil }
+                return NSImage(data: artworkData)
             }) { [weak self] image in
                 guard let self else { return }
                 self.lock.lock()
@@ -120,12 +124,12 @@ final class QQMusicSource: NowPlayingSource {
 
         return Track(
             id: id,
-            title: snapshot.title,
-            artist: bestArtist(ax: snapshot.artist, metadata: metadata, mediaRemote: mr),
+            title: title,
+            artist: bestArtist(ax: artist, metadata: metadata, mediaRemote: mr),
             album: bestAlbum(metadata: metadata, mediaRemote: mr),
             duration: bestDuration(metadata: metadata, mediaRemote: mr),
             artwork: cachedArt,
-            isLiked: snapshot.liked,
+            isLiked: ax?.liked,
             links: TrackLinks(
                 track: metadata?.songMid.map { "https://y.qq.com/n/ryqq/songDetail/\($0)" },
                 artist: nil,
@@ -135,12 +139,18 @@ final class QQMusicSource: NowPlayingSource {
     }
 
     func currentState() -> PlaybackState? {
-        guard let snapshot = snapshot(), let playing = snapshot.playing else { return nil }
-        let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
-        if let mr = matchedMediaRemote(for: snapshot, maxAge: 0, timeout: 0.8) {
+        let ax = snapshot()
+        let mr = matchedMediaRemote(for: ax, maxAge: 0, timeout: 0.8)
+        guard ax != nil || mr != nil else { return nil }
+
+        let title = ax?.title ?? mr?.title ?? ""
+        let artist = ax?.artist ?? mr?.artist ?? ""
+        let metadata = metadataStore.metadata(title: title, artist: artist)
+        if let mr {
+            let playing = ax?.playing ?? (mr.playbackRate > 0)
             let position = mr.estimatedPosition(forcePaused: !playing)
             writeDebug(
-                snapshot: snapshot,
+                snapshot: ax,
                 mediaRemote: mr,
                 path: "mediaRemote",
                 position: position
@@ -151,6 +161,8 @@ final class QQMusicSource: NowPlayingSource {
                 source: .qqMusic
             )
         }
+
+        guard let snapshot = ax, let playing = snapshot.playing else { return nil }
 
         let id = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
         let duration = metadata?.duration ?? 0
@@ -169,7 +181,7 @@ final class QQMusicSource: NowPlayingSource {
         let position = estimatedPosition(now: now, duration: duration)
         lock.unlock()
 
-        writeDebug(snapshot: snapshot, mediaRemote: mediaRemote.snapshot(maxAge: 0), path: "fallback", position: position)
+        writeDebug(snapshot: snapshot, mediaRemote: mediaRemote.snapshot(bundleID: bundleID, maxAge: 0), path: "fallback", position: position)
         return PlaybackState(isPlaying: playing, position: position, source: .qqMusic)
     }
 
@@ -182,21 +194,22 @@ final class QQMusicSource: NowPlayingSource {
     }
 
     private func matchedMediaRemote(
-        for snapshot: PlaybarSnapshot,
+        for snapshot: PlaybarSnapshot?,
         maxAge: TimeInterval = 0.35,
         timeout: TimeInterval = 0.25
-    ) -> QQMusicMediaRemoteNowPlaying.Snapshot? {
-        guard let mr = mediaRemote.snapshot(maxAge: maxAge, timeout: timeout),
-              mr.matches(title: snapshot.title, artist: snapshot.artist) else {
+    ) -> MediaRemoteClientNowPlaying.Snapshot? {
+        guard let mr = mediaRemote.snapshot(bundleID: bundleID, maxAge: maxAge, timeout: timeout) else {
             return nil
         }
+        guard let snapshot else { return mr }
+        guard mr.matches(title: snapshot.title, artist: snapshot.artist) else { return nil }
         return mr
     }
 
     private func bestArtist(
         ax: String,
         metadata: QQMusicMetadata?,
-        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+        mediaRemote: MediaRemoteClientNowPlaying.Snapshot?
     ) -> String {
         if let metadata, !metadata.artist.isEmpty { return metadata.artist }
         if let mediaRemote, !mediaRemote.artist.isEmpty { return mediaRemote.artist }
@@ -205,7 +218,7 @@ final class QQMusicSource: NowPlayingSource {
 
     private func bestAlbum(
         metadata: QQMusicMetadata?,
-        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+        mediaRemote: MediaRemoteClientNowPlaying.Snapshot?
     ) -> String {
         if let metadata, !metadata.album.isEmpty { return metadata.album }
         return mediaRemote?.album ?? ""
@@ -213,15 +226,15 @@ final class QQMusicSource: NowPlayingSource {
 
     private func bestDuration(
         metadata: QQMusicMetadata?,
-        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?
+        mediaRemote: MediaRemoteClientNowPlaying.Snapshot?
     ) -> TimeInterval {
         if let duration = metadata?.duration, duration > 0 { return duration }
         return mediaRemote?.duration ?? 0
     }
 
     private func writeDebug(
-        snapshot: PlaybarSnapshot,
-        mediaRemote: QQMusicMediaRemoteNowPlaying.Snapshot?,
+        snapshot: PlaybarSnapshot?,
+        mediaRemote: MediaRemoteClientNowPlaying.Snapshot?,
         path: String,
         position: TimeInterval
     ) {
@@ -230,16 +243,16 @@ final class QQMusicSource: NowPlayingSource {
         let lines = [
             "time=\(Date())",
             "path=\(path)",
-            "axTitle=\(snapshot.title)",
-            "axArtist=\(snapshot.artist)",
-            "axPlaying=\(snapshot.playing.map(String.init) ?? "nil")",
+            "axTitle=\(snapshot?.title ?? "nil")",
+            "axArtist=\(snapshot?.artist ?? "nil")",
+            "axPlaying=\(snapshot?.playing.map(String.init) ?? "nil")",
             "mrTitle=\(mediaRemote?.title ?? "nil")",
             "mrArtist=\(mediaRemote?.artist ?? "nil")",
             "mrElapsed=\(mediaRemote.map { String(format: "%.3f", $0.elapsed) } ?? "nil")",
             "mrDuration=\(mediaRemote.map { String(format: "%.3f", $0.duration) } ?? "nil")",
             "mrRate=\(mediaRemote.map { String(format: "%.3f", $0.playbackRate) } ?? "nil")",
             "mrTimestamp=\(mediaRemote?.timestamp.map(String.init) ?? "nil")",
-            "mrMatches=\(mediaRemote?.matches(title: snapshot.title, artist: snapshot.artist).description ?? "nil")",
+            "mrMatches=\(snapshot.flatMap { mediaRemote?.matches(title: $0.title, artist: $0.artist).description } ?? "nil")",
             "position=\(String(format: "%.3f", position))",
         ]
         try? (lines.joined(separator: "\n") + "\n").write(
@@ -281,13 +294,12 @@ final class QQMusicSource: NowPlayingSource {
         }
         let metadata = metadataStore.metadata(title: snapshot.title, artist: snapshot.artist)
         let duration = bestDuration(metadata: metadata, mediaRemote: mr)
-        if mediaRemote.seek(to: position, duration: duration) {
-            lock.lock()
-            progressTrackID = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
-            progressAnchorDate = Date()
-            progressAnchorPosition = duration > 0 ? min(max(position, 0), duration) : max(position, 0)
-            lock.unlock()
-        }
+        lock.lock()
+        progressTrackID = metadata?.stableID ?? "qq:\(snapshot.title)|\(snapshot.artist)"
+        progressAnchorDate = Date()
+        progressAnchorPosition = duration > 0 ? min(max(position, 0), duration) : max(position, 0)
+        lock.unlock()
+        MediaRemoteAdapterBridge.shared.seek(to: position, expectedBundleID: bundleID)
     }
 
     func setLiked(_ liked: Bool) {

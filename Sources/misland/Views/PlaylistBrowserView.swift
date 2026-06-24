@@ -18,6 +18,7 @@ final class PlaylistBrowserModel {
     /// URL loaded lazily per visible row via ArtworkCache.
     var likedByID: [String: Bool] = [:]
     var coverByID: [String: String] = [:]
+    var canPlayRows: Bool { PlaylistService.canPlayFromBrowser(source) }
 
     // Playback modes are passthrough — toggling sets the player's mode directly.
     var shuffle = false
@@ -80,6 +81,7 @@ final class PlaylistBrowserModel {
         case .spotify:    return coverByID[pl.id].map(CoverSource.url) ?? .none
         case .appleMusic: return .appleMusicPlaylist(playlistID: pl.id)
         case .qqMusic:    return .none
+        case .neteaseMusic: return coverByID[pl.id].map(CoverSource.url) ?? .none
         }
     }
 
@@ -94,6 +96,8 @@ final class PlaylistBrowserModel {
             return .none
         case .qqMusic:
             return .none
+        case .neteaseMusic:
+            return coverByID[t.id].map(CoverSource.url) ?? .none
         }
     }
 
@@ -138,7 +142,9 @@ struct PlaylistBrowserView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(.white.opacity(0.08))
+            Divider()
+                .overlay(.white.opacity(0.08))
+                .frame(width: IslandLayout.expandedContentWidth)
             content
         }
         .frame(width: IslandLayout.expandedWidth, height: IslandLayout.browserHeight, alignment: .top)
@@ -173,13 +179,19 @@ struct PlaylistBrowserView: View {
             // Up-chevron collapses the browser back to the main player panel.
             IconButton(system: "chevron.up", size: 14) { onClose() }
         }
-        .padding(.horizontal, 16)
+        .frame(width: IslandLayout.expandedContentWidth)
         .frame(height: 40)
     }
 
     private var title: String {
         switch model.level {
-        case .playlists: return model.source == .spotify ? "Spotify 歌单" : "Apple Music 歌单"
+        case .playlists:
+            switch model.source {
+            case .spotify: return "Spotify 歌单"
+            case .appleMusic: return "Apple Music 歌单"
+            case .qqMusic: return "QQ 音乐队列"
+            case .neteaseMusic: return "网易云歌单"
+            }
         case .tracks(let p): return p.name
         }
     }
@@ -207,6 +219,7 @@ struct PlaylistBrowserView: View {
                             ForEach(model.playlists) { pl in
                                 PlaylistRow(name: pl.name,
                                             cover: model.coverSource(forPlaylist: pl),
+                                            canPlay: model.canPlayRows,
                                             onTap: { model.enter(pl) },
                                             onPlay: { model.play(pl) })
                             }
@@ -219,6 +232,7 @@ struct PlaylistBrowserView: View {
                                 TrackRow(name: t.name, artist: t.artist,
                                          cover: model.coverSource(forTrack: t),
                                          liked: model.isLiked(t),
+                                         canPlay: model.canPlayRows,
                                          onPlay: { model.play(t, in: pl) },
                                          onToggleLike: { model.toggleLike(t) })
                             }
@@ -226,6 +240,7 @@ struct PlaylistBrowserView: View {
                     }
                 }
                 .padding(.vertical, 4)
+                .frame(width: IslandLayout.expandedContentWidth)
             }
         }
     }
@@ -244,6 +259,7 @@ struct PlaylistBrowserView: View {
 private struct PlaylistRow: View {
     let name: String
     let cover: CoverSource
+    let canPlay: Bool
     let onTap: () -> Void
     let onPlay: () -> Void
     @State private var hover = false
@@ -257,15 +273,16 @@ private struct PlaylistRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 6)
-            if hover {
+            if hover && canPlay {
                 IconButton(system: "play.fill", size: 11, action: onPlay)
             }
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.3))
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 0)
         .frame(height: 44)
+        .frame(width: IslandLayout.expandedContentWidth)
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
@@ -281,6 +298,7 @@ private struct TrackRow: View {
     let artist: String
     let cover: CoverSource
     let liked: Bool
+    let canPlay: Bool
     let onPlay: () -> Void
     let onToggleLike: () -> Void
     @State private var hover = false
@@ -306,11 +324,15 @@ private struct TrackRow: View {
             IconButton(system: liked ? "heart.fill" : "heart", size: 13,
                        tint: liked ? .pink : .white, action: onToggleLike)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 0)
         .frame(height: 44)
+        .frame(width: IslandLayout.expandedContentWidth)
         .background(hover ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: onPlay)
+        .onTapGesture(count: 2) {
+            guard canPlay else { return }
+            onPlay()
+        }
         .onHover { h in
             hover = h
             if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }

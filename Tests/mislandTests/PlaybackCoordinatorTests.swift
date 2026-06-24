@@ -46,6 +46,10 @@ final class PlaybackCoordinatorTests: XCTestCase {
 
         c.playPause(); c.next(); c.previous(); c.seek(to: 42)
 
+        let controls = expectation(description: "controls off-main")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { controls.fulfill() }
+        wait(for: [controls], timeout: 1)
+
         XCTAssertEqual(music.playPauseCalls, 1)
         XCTAssertEqual(music.nextCalls, 1)
         XCTAssertEqual(music.previousCalls, 1)

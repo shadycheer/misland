@@ -8,7 +8,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: PlaybackCoordinator!
     private var timer: Timer?
     private var geo = IslandGeometry(hasNotch: false, notchWidth: 0, notchHeight: 0)
-    private let sources: [NowPlayingSource] = [SpotifySource(), AppleMusicSource(), QQMusicSource()]
+    private let sources: [NowPlayingSource] = [
+        SpotifySource(),
+        AppleMusicSource(),
+        QQMusicSource(),
+        NetEaseMusicSource(),
+    ]
     private let pollQueue = DispatchQueue(label: "com.shadycheer.misland.poll")
     private let islandState = IslandState()
     private var collapsedScreenRect: CGRect = .zero  // exact screen rect of the pill
@@ -158,13 +163,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         computeRects()
     }
 
-    /// The browser makes the panel taller; resize the fixed window (and refresh
-    /// hit rects) so the expanded screen rect matches what's drawn.
+    /// The backing window is always tall enough for the browser. Opening it only
+    /// changes the visible island height and hit rect, so the top edge stays fixed.
     private func setBrowser(open: Bool) {
         guard browserOpen != open else { return }
         browserOpen = open
-        guard let screen = currentScreen else { return }
-        window.place(on: screen, size: expandedSize)
         computeRects()
     }
 
@@ -173,12 +176,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func computeRects() {
         let f = window.frame
         let c = collapsedSize
+        let e = currentExpandedSize
         collapsedScreenRect = CGRect(
             x: f.minX + (f.width - c.width) / 2,
             y: f.maxY - c.height,
             width: c.width, height: c.height
         )
-        expandedScreenRect = f
+        expandedScreenRect = CGRect(
+            x: f.minX,
+            y: f.maxY - e.height,
+            width: e.width,
+            height: e.height
+        )
     }
 
     /// Read the players off the main thread (ScriptingBridge is synchronous IPC),
@@ -193,6 +202,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var expandedSize: CGSize {
+        let strip = geo.hasNotch ? geo.notchHeight : IslandLayout.noNotchStripHeight
+        return CGSize(width: IslandLayout.expandedWidth, height: strip + IslandLayout.browserHeight)
+    }
+
+    private var currentExpandedSize: CGSize {
         let content = browserOpen ? IslandLayout.browserHeight : IslandLayout.expandedHeight
         let strip = geo.hasNotch ? geo.notchHeight : IslandLayout.noNotchStripHeight
         return CGSize(width: IslandLayout.expandedWidth, height: strip + content)

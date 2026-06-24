@@ -101,6 +101,9 @@ final class PlaybackCoordinator {
         if s.track != track { track = s.track }
         if s.state != state { state = s.state }
         if s.canLike != canLike { canLike = s.canLike }
+        if let track = s.track, let source = s.state?.source {
+            PlaybackHistoryStore.shared.record(track: track, source: source)
+        }
     }
 
     /// Synchronous read+publish — used by tests; the app polls off-main instead.
@@ -115,10 +118,36 @@ final class PlaybackCoordinator {
         activation[kind] = tick
     }
 
-    func playPause() { activeSource?.playPause() }
-    func next() { activeSource?.next() }
-    func previous() { activeSource?.previous() }
-    func seek(to position: TimeInterval) { activeSource?.seek(to: position) }
+    func playPause() {
+        guard let s = activeSource else { return }
+        if var current = state, current.source == s.kind {
+            current.isPlaying.toggle()
+            current.sampledAt = Date()
+            state = current
+        }
+        DispatchQueue.global(qos: .userInitiated).async { s.playPause() }
+    }
+
+    func next() {
+        guard let s = activeSource else { return }
+        DispatchQueue.global(qos: .userInitiated).async { s.next() }
+    }
+
+    func previous() {
+        guard let s = activeSource else { return }
+        DispatchQueue.global(qos: .userInitiated).async { s.previous() }
+    }
+
+    func seek(to position: TimeInterval) {
+        guard let s = activeSource else { return }
+        if var current = state, current.source == s.kind {
+            let duration = track?.duration ?? 0
+            current.position = duration > 0 ? min(max(position, 0), duration) : max(position, 0)
+            current.sampledAt = Date()
+            state = current
+        }
+        DispatchQueue.global(qos: .userInitiated).async { s.seek(to: position) }
+    }
 
     func toggleLike() {
         guard let s = activeSource, s.canSetLiked else { return }

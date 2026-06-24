@@ -32,6 +32,7 @@ final class SpotifySource: NowPlayingSource {
         guard isRunning, let t = app?.currentTrack else { return nil }
         guard let id = t.id else { return nil }
         guard let name = t.name else { return nil }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
         lock.lock()
         pollCount += 1

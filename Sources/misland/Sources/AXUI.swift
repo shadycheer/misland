@@ -72,6 +72,12 @@ enum AXUI {
 
     static func desc(_ el: AXUIElement) -> String? { str(el, kAXDescriptionAttribute as String) }
     static func title(_ el: AXUIElement) -> String? { str(el, kAXTitleAttribute as String) }
+    static func help(_ el: AXUIElement) -> String? { str(el, kAXHelpAttribute as String) }
+
+    static func actionNames(_ el: AXUIElement) -> [String] {
+        var names: CFArray?
+        return AXUIElementCopyActionNames(el, &names) == .success ? (names as? [String]) ?? [] : []
+    }
 
     @discardableResult
     static func press(_ el: AXUIElement) -> Bool {
@@ -90,6 +96,30 @@ enum AXUI {
         }
         for item in children(menu) where options.contains(title(item) ?? "") {
             return press(item)
+        }
+        return false
+    }
+
+    @discardableResult
+    static func pressAnyMenuItem(_ app: AXUIElement, menus: [String], titleIn options: [String]) -> Bool {
+        for menu in menus where pressMenuItem(app, menu: menu, titleIn: options) {
+            return true
+        }
+        return false
+    }
+
+    @discardableResult
+    static func pressFirstDescendant(in app: AXUIElement, labels: [String]) -> Bool {
+        for window in windows(app) {
+            if let target = firstDescendant(of: window, maxDepth: 14, where: { el in
+                guard actionNames(el).contains(kAXPressAction as String) else { return false }
+                let values = [title(el), desc(el), help(el)].compactMap { $0 }
+                return values.contains { value in
+                    labels.contains { label in value == label || value.contains(label) }
+                }
+            }) {
+                return press(target)
+            }
         }
         return false
     }

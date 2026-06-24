@@ -1,6 +1,11 @@
 APP=misland
 BUNDLE=.build/$(APP).app
 BIN=.build/release/$(APP)
+DEV_BUNDLE=.build/$(APP)-dev.app
+DEV_BIN=.build/debug/$(APP)
+MEDIAREMOTE_ADAPTER_DIR=tools/mediaremote-adapter
+MEDIAREMOTE_ADAPTER_FRAMEWORK=$(MEDIAREMOTE_ADAPTER_DIR)/build/MediaRemoteAdapter.framework
+MEDIAREMOTE_ADAPTER_SCRIPT=$(MEDIAREMOTE_ADAPTER_DIR)/bin/mediaremote-adapter.pl
 
 # Prefer a stable Apple Development identity so TCC grants (Accessibility,
 # Automation) PERSIST across rebuilds. Falls back to ad-hoc (e.g. on CI, where
@@ -13,20 +18,50 @@ endif
 build:
 	swift build -c release
 
-bundle: build
+dev-build:
+	swift build
+
+mediaremote-adapter:
+	@if [ ! -d "$(MEDIAREMOTE_ADAPTER_DIR)/.git" ]; then \
+	  rm -rf "$(MEDIAREMOTE_ADAPTER_DIR)"; \
+	  git clone --depth 1 https://github.com/ungive/mediaremote-adapter.git "$(MEDIAREMOTE_ADAPTER_DIR)"; \
+	fi
+	cmake -S "$(MEDIAREMOTE_ADAPTER_DIR)" -B "$(MEDIAREMOTE_ADAPTER_DIR)/build" -DCMAKE_BUILD_TYPE=Release
+	cmake --build "$(MEDIAREMOTE_ADAPTER_DIR)/build" --config Release
+
+bundle: build mediaremote-adapter
 	rm -rf $(BUNDLE)
-	mkdir -p $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources
+	mkdir -p $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources $(BUNDLE)/Contents/Frameworks
 	cp $(BIN) $(BUNDLE)/Contents/MacOS/$(APP)
 	cp Resources/Info.plist $(BUNDLE)/Contents/Info.plist
 	cp Resources/AppIcon.icns $(BUNDLE)/Contents/Resources/AppIcon.icns
+	cp -R "$(MEDIAREMOTE_ADAPTER_FRAMEWORK)" "$(BUNDLE)/Contents/Frameworks/MediaRemoteAdapter.framework"
+	cp "$(MEDIAREMOTE_ADAPTER_SCRIPT)" "$(BUNDLE)/Contents/Resources/mediaremote-adapter.pl"
 	@echo "codesign identity: $(SIGN_ID)"
 	codesign --force --deep --sign "$(SIGN_ID)" \
 	  --entitlements Resources/misland.entitlements \
 	  $(BUNDLE)
 
+dev-bundle: dev-build mediaremote-adapter
+	rm -rf $(DEV_BUNDLE)
+	mkdir -p $(DEV_BUNDLE)/Contents/MacOS $(DEV_BUNDLE)/Contents/Resources $(DEV_BUNDLE)/Contents/Frameworks
+	cp $(DEV_BIN) $(DEV_BUNDLE)/Contents/MacOS/$(APP)
+	cp Resources/Info.plist $(DEV_BUNDLE)/Contents/Info.plist
+	cp Resources/AppIcon.icns $(DEV_BUNDLE)/Contents/Resources/AppIcon.icns
+	cp -R "$(MEDIAREMOTE_ADAPTER_FRAMEWORK)" "$(DEV_BUNDLE)/Contents/Frameworks/MediaRemoteAdapter.framework"
+	cp "$(MEDIAREMOTE_ADAPTER_SCRIPT)" "$(DEV_BUNDLE)/Contents/Resources/mediaremote-adapter.pl"
+	@echo "codesign identity: $(SIGN_ID)"
+	codesign --force --deep --sign "$(SIGN_ID)" \
+	  --entitlements Resources/misland.entitlements \
+	  $(DEV_BUNDLE)
+
 run: bundle
 	-killall $(APP) 2>/dev/null; sleep 0.3
 	open -n $(BUNDLE)
+
+dev-run: dev-bundle
+	-killall $(APP) 2>/dev/null; sleep 0.2
+	open -n $(DEV_BUNDLE)
 
 test:
 	swift test
@@ -56,4 +91,4 @@ dmg: bundle
 watch:
 	@bash scripts/watch.sh
 
-.PHONY: build bundle run test watch
+.PHONY: build dev-build mediaremote-adapter bundle dev-bundle run dev-run test watch
