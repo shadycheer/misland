@@ -2,17 +2,43 @@ name: Release
 
 on:
   push:
+    branches: [main, master]
     tags: ['v*']
   workflow_dispatch:   # allow manual runs from the Actions tab
 
 permissions:
   contents: write       # needed to create the Release and upload the DMG
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-14   # Apple Silicon runner
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare release tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            echo "Using pushed tag: ${tag}"
+          else
+            tag="v$(date -u +%Y.%m.%d).${GITHUB_RUN_NUMBER}"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${tag}" -m "Release ${tag}"
+            git push origin "${tag}"
+            echo "Created tag: ${tag}"
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "RELEASE_TAG=${tag}" >> "${GITHUB_ENV}"
 
       - name: Show toolchain
         run: swift --version && sw_vers
@@ -26,15 +52,19 @@ jobs:
       - name: Build & package DMG
         run: make dmg
 
+      - name: Name release asset
+        run: cp .build/misland.dmg ".build/MisLand-${RELEASE_TAG}.dmg"
+
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: misland-dmg
-          path: .build/misland.dmg
+          name: MisLand-${{ steps.tag.outputs.tag }}.dmg
+          path: .build/MisLand-${{ steps.tag.outputs.tag }}.dmg
 
       - name: Publish to Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: .build/misland.dmg
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: MisLand ${{ steps.tag.outputs.tag }}
+          files: .build/MisLand-${{ steps.tag.outputs.tag }}.dmg
           generate_release_notes: true
